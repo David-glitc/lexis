@@ -264,3 +264,35 @@
   - `mock-api.createDailyPuzzleForDate(date)`: creates puzzle with `daily-YYYY-MM-DD` id
   - Daily history recording on puzzle win/loss in `handleKey` callback
 
+## [2026-03-16T18:00Z] Navigation, Avatars, Training, Settings Overhaul
+
+### Global Navigation (AppShell rewrite)
+- **Mobile**: iOS-style fixed bottom tab bar with 5 tabs (Play, Training, Challenges, Leaderboard, Profile) + "More" slide-up sheet (Friends, Settings)
+- **Desktop**: Fixed left sidebar with all 8 links + separator before Settings
+- Active tab indicator: green dot above icon, white text; inactive: zinc-500
+- Profile tab shows user's first letter when signed in
+- Removed hamburger menu entirely on mobile
+- `Ctrl+Shift+L` → `X` (within 500ms) navigates to `/admin`
+- Safe area padding for iOS (`env(safe-area-inset-bottom)`)
+- Bottom spacer `h-20 md:hidden` to prevent content overlap with nav bar
+
+### SVG Avatar System
+- Created `components/ui/avatars.tsx` with 12 unique character avatars: Ninja, Fox, Astronaut, Robot, Ghost, Alien, Cat, Bear, Wizard, Knight, Panda, Owl
+- `UserAvatar` component: renders SVG avatar or initial-letter fallback circle
+- `AvatarPicker` component: 4-column grid for selecting avatars
+
+### Training Page (hints) Overhaul
+- Fullscreen hint modal overlay with dark glass styling
+- 3-level word clue system: vowel/consonant count (free), category hint, full reveal (0 points)
+- Floating hint button with pulse animation and credit badge
+- Responsive layout: `max-w-[350px]` board / `max-w-[500px]` keyboard on desktop
+
+### Settings Page Improvements
+- Added avatar picker section at top of Profile card
+- Shows current avatar preview + grid of all 12 options
+- Avatar selection saved to Supabase via `avatar_url` field
+
+### Auth Gate on Landing Page
+- Signed-in users auto-redirect from landing page (`/`) to `/play`
+- Shows spinner while checking auth state
+
