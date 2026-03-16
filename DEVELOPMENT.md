@@ -238,3 +238,29 @@
 - Created `public/sw.js` service worker: precaches core routes, network-first with cache fallback
 - Registered service worker in `layout.tsx` via inline script
 
+### Training Page Rewrite — 2026-03-16
+- Rewrote `apps/web/src/app/hints/page.tsx` as a rich training experience:
+  - Replaced inline HintPanel with a fullscreen modal overlay (dark glass `bg-[#0a0a0a]` card) opened via a floating lightbulb button with pulsing glow and credit badge
+  - Added local "word_clue" hint system with 3 progressive levels: vowel/consonant count (free), category-based clue (1 credit), full answer reveal (0 points penalty)
+  - Modal split into "Word Clues" and "Power Hints" sections with large tappable cards; used hints shown as green-bordered cards
+  - Responsive layout: board capped at `max-w-[350px]`, keyboard at `max-w-[500px]` on desktop; full-width with padding on mobile
+  - Added `pulse-subtle` keyframe animation to `globals.css`
+  - All existing game logic (createMockPuzzle, submitMockGuess, keyboard handling, keyboardState derivation) preserved
+
+### Daily Challenge Improvements — 2026-03-16
+- **Daily label by date**: Replaced `DAILY #123` with `DAILY DD-MM-Day` format (e.g. `16-03-Su`) using `getDailyLabel()` helper
+- **Past daily calendar**: Added `DailyCalendar` component toggled by clicking the DAILY button:
+  - Month grid with prev/next navigation, day-of-week headers (Su, M, T, W, Th, F, S)
+  - Green dot for solved dates, gray dot for available dates (epoch 2026-01-01 through today)
+  - Clicking a date loads that day's puzzle via `createDailyPuzzleForDate()`
+  - History persisted in localStorage `lexis_daily_history` as `{ date, solved }[]`
+- **Enhanced speed timer**: Replaced plain text timer with progress bar + digital time display:
+  - Color-coded: green > 50%, yellow 25-50%, red < 25% time remaining
+  - Eye icon toggle to hide/show timer (persisted in localStorage `lexis_hide_timer`)
+  - Hidden state shows subtle "Timer hidden" text with show button
+- **Speed mode visual indicator**: Active SPEED button shows checkmark icon + green ring-2 border
+- **Supporting changes**:
+  - `WordService.getDailySolutionForDate(date)`: deterministic solution for any date
+  - `mock-api.createDailyPuzzleForDate(date)`: creates puzzle with `daily-YYYY-MM-DD` id
+  - Daily history recording on puzzle win/loss in `handleKey` callback
+

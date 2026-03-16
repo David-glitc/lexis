@@ -319,6 +319,14 @@ export class WordService {
     return this.solutions[dayIndex];
   }
 
+  getDailySolutionForDate(date: Date): string {
+    const epoch = new Date("2026-01-01").getTime();
+    const target = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+    const dayIndex = Math.floor((target - epoch) / 86400000);
+    if (dayIndex < 0) return this.solutions[0];
+    return this.solutions[dayIndex % this.solutions.length];
+  }
+
   getSolutionCount(): number {
     return this.solutions.length;
   }

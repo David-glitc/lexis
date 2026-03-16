@@ -1,13 +1,59 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-import {
-  computeScore,
-  evaluateGuessAgainstSolution,
-  type Challenge,
-  type ChallengeResult,
-  type Friend,
-  type LeaderboardEntry
-} from "../../packages/shared/src/index.ts";
 import { verifyAuthHeader } from "./supabase.ts";
+
+type LetterResult = "correct" | "present" | "absent";
+
+interface EvaluatedLetter {
+  letter: string;
+  result: LetterResult;
+}
+
+function evaluateGuessAgainstSolution(guess: string, solution: string): EvaluatedLetter[] {
+  const guessLetters = guess.toLowerCase().split("");
+  const solutionLetters = solution.toLowerCase().split("");
+  return guessLetters.map((letter, index) => {
+    let result: LetterResult = "absent";
+    if (solutionLetters[index] === letter) {
+      result = "correct";
+    } else if (solutionLetters.includes(letter)) {
+      result = "present";
+    }
+    return { letter, result };
+  });
+}
+
+interface Friend {
+  userId: string;
+  username: string;
+}
+
+interface Challenge {
+  id: string;
+  creatorId: string;
+  puzzleSeed: string;
+  attemptLimit: number;
+  createdAt: number;
+}
+
+interface ChallengeResult {
+  challengeId: string;
+  userId: string;
+  attempts: number;
+  elapsedMs: number;
+}
+
+interface LeaderboardEntry {
+  userId: string;
+  username: string;
+  puzzlesSolved: number;
+  streak: number;
+  averageAttempts: number;
+}
+
+function computeScore(entry: LeaderboardEntry): number {
+  const { puzzlesSolved, streak, averageAttempts } = entry;
+  return puzzlesSolved * 5 + streak * 3 - averageAttempts * 2;
+}
 
 // ── Logger ──────────────────────────────────────────────────────────────
 

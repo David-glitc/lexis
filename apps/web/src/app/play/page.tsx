@@ -7,6 +7,7 @@ import { Keyboard, type KeyboardState } from "../../features/puzzle/keyboard";
 import {
   createMockPuzzle,
   createDailyPuzzle,
+  createDailyPuzzleForDate,
   submitMockGuess,
   type MockPuzzle
 } from "../../features/puzzle/mock-api";
@@ -69,6 +70,139 @@ function getCountdownToMidnight(): string {
   const minutes = Math.floor((diff % 3600000) / 60000);
   const seconds = Math.floor((diff % 60000) / 1000);
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function getDailyLabel(): string {
+  const d = new Date();
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const days = ["Su", "M", "T", "W", "Th", "F", "S"];
+  return `${dd}-${mm}-${days[d.getDay()]}`;
+}
+
+function formatDateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+interface DailyHistoryEntry {
+  date: string;
+  solved: boolean;
+}
+
+function getDailyHistory(): DailyHistoryEntry[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem("lexis_daily_history");
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function addDailyHistory(date: string, solved: boolean) {
+  if (typeof window === "undefined") return;
+  try {
+    const history = getDailyHistory();
+    const idx = history.findIndex((h) => h.date === date);
+    if (idx >= 0) {
+      history[idx].solved = history[idx].solved || solved;
+    } else {
+      history.push({ date, solved });
+    }
+    localStorage.setItem("lexis_daily_history", JSON.stringify(history));
+  } catch {
+    // storage unavailable
+  }
+}
+
+const CALENDAR_EPOCH = new Date("2026-01-01");
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"
+];
+
+function DailyCalendar({ onSelectDate }: { onSelectDate: (date: Date) => void }) {
+  const [viewDate, setViewDate] = useState(() => new Date());
+  const history = useMemo(getDailyHistory, []);
+
+  const today = useMemo(() => {
+    const t = new Date();
+    t.setHours(0, 0, 0, 0);
+    return t;
+  }, []);
+
+  const year = viewDate.getFullYear();
+  const month = viewDate.getMonth();
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const cells: (number | null)[] = useMemo(() => {
+    const c: (number | null)[] = [];
+    for (let i = 0; i < firstDay; i++) c.push(null);
+    for (let d = 1; d <= daysInMonth; d++) c.push(d);
+    return c;
+  }, [firstDay, daysInMonth]);
+
+  function getStatus(day: number): "solved" | "available" | "none" {
+    const date = new Date(year, month, day);
+    date.setHours(0, 0, 0, 0);
+    if (date > today || date < CALENDAR_EPOCH) return "none";
+    const key = formatDateKey(date);
+    const entry = history.find((h) => h.date === key);
+    if (entry?.solved) return "solved";
+    return "available";
+  }
+
+  const canGoNext = new Date(year, month + 1, 1) <= today;
+
+  return (
+    <div className="mx-auto max-w-[320px] bg-[#111] rounded-xl border border-white/[0.08] p-3">
+      <div className="flex items-center justify-between mb-2">
+        <button
+          onClick={() => setViewDate(new Date(year, month - 1, 1))}
+          className="text-zinc-400 hover:text-white p-1 transition-colors"
+          aria-label="Previous month"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <span className="text-white text-xs font-display font-bold tracking-wider">
+          {MONTH_NAMES[month]} {year}
+        </span>
+        <button
+          onClick={() => canGoNext && setViewDate(new Date(year, month + 1, 1))}
+          className={`p-1 transition-colors ${canGoNext ? "text-zinc-400 hover:text-white" : "text-zinc-700 cursor-default"}`}
+          aria-label="Next month"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
+      </div>
+      <div className="grid grid-cols-7 gap-0.5 text-center">
+        {["Su", "M", "T", "W", "Th", "F", "S"].map((d) => (
+          <div key={d} className="text-[10px] text-zinc-600 font-mono py-1">{d}</div>
+        ))}
+        {cells.map((day, i) => {
+          if (day === null) return <div key={`e-${i}`} />;
+          const status = getStatus(day);
+          const isToday = day === today.getDate() && month === today.getMonth() && year === today.getFullYear();
+          const clickable = status !== "none";
+          return (
+            <button
+              key={day}
+              disabled={!clickable}
+              onClick={() => clickable && onSelectDate(new Date(year, month, day))}
+              className={`relative w-full aspect-square flex flex-col items-center justify-center rounded-md text-xs transition-colors ${
+                isToday ? "ring-1 ring-white/30" : ""
+              } ${clickable ? "hover:bg-white/10 cursor-pointer" : "cursor-default opacity-40"}`}
+            >
+              <span className={`font-mono ${isToday ? "text-white font-bold" : "text-zinc-400"}`}>{day}</span>
+              {status === "solved" && <span className="absolute bottom-0.5 w-1.5 h-1.5 rounded-full bg-[#538d4e]" />}
+              {status === "available" && <span className="absolute bottom-0.5 w-1.5 h-1.5 rounded-full bg-zinc-600" />}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function StatsIcon() {
@@ -308,6 +442,11 @@ export default function PlayPage() {
   const [speedTimer, setSpeedTimer] = useState<number>(0);
   const [speedTimerActive, setSpeedTimerActive] = useState(false);
   const speedStartTime = useRef<number>(0);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [hideTimer, setHideTimer] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("lexis_hide_timer") === "true";
+  });
 
   useEffect(() => {
     if (!puzzleStarted.current) {
@@ -391,6 +530,11 @@ export default function PlayPage() {
             puzzleService.finishPuzzle(true);
             setSpeedTimerActive(false);
 
+            if (mode === "daily") {
+              const dateStr = puzzle.id === "daily" ? formatDateKey(new Date()) : puzzle.id.replace("daily-", "");
+              addDailyHistory(dateStr, true);
+            }
+
             if (user) {
               const supabase = createClient();
               const points = PointsService.getPointsForGuesses(next.attempts);
@@ -411,6 +555,11 @@ export default function PlayPage() {
             toast(next.solution.toUpperCase(), 4000);
             puzzleService.finishPuzzle(false);
             setSpeedTimerActive(false);
+
+            if (mode === "daily") {
+              const dateStr = puzzle.id === "daily" ? formatDateKey(new Date()) : puzzle.id.replace("daily-", "");
+              addDailyHistory(dateStr, false);
+            }
 
             if (mode === "speed" && speedChallenge && user) {
               const supabase = createClient();
@@ -475,17 +624,21 @@ export default function PlayPage() {
 
   const speedTimeRemaining = useMemo(() => {
     if (mode !== "speed" || !speedChallenge) return null;
-    const remaining = Math.max(0, speedChallenge.time_limit_seconds * 1000 - speedTimer);
+    const totalMs = speedChallenge.time_limit_seconds * 1000;
+    const remaining = Math.max(0, totalMs - speedTimer);
+    const progress = totalMs > 0 ? remaining / totalMs : 0;
     const mins = Math.floor(remaining / 60000);
     const secs = Math.floor((remaining % 60000) / 1000);
     const tenths = Math.floor((remaining % 1000) / 100);
     return {
       display: `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}.${tenths}`,
+      progress,
       critical: remaining < 10000,
     };
   }, [mode, speedChallenge, speedTimer]);
 
   async function startNewPuzzle(newMode: GameMode) {
+    setShowCalendar(false);
     setSpeedTimerActive(false);
     setSpeedChallenge(null);
 
@@ -523,6 +676,40 @@ export default function PlayPage() {
     setRevealingRow(undefined);
     setBounceRow(undefined);
     puzzleStarted.current = false;
+  }
+
+  function handleDailyClick() {
+    if (mode === "daily") {
+      setShowCalendar((prev) => !prev);
+    } else {
+      startNewPuzzle("daily");
+      setShowCalendar(true);
+    }
+  }
+
+  function handleModeSwitch(newMode: GameMode) {
+    setShowCalendar(false);
+    startNewPuzzle(newMode);
+  }
+
+  function handleCalendarSelect(date: Date) {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const sel = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    if (sel.getTime() === todayStart.getTime()) {
+      startNewPuzzle("daily");
+    } else {
+      setSpeedTimerActive(false);
+      setSpeedChallenge(null);
+      const p = createDailyPuzzleForDate(date);
+      setMode("daily");
+      setPuzzle(p);
+      setCurrentGuess("");
+      setRevealingRow(undefined);
+      setBounceRow(undefined);
+      puzzleStarted.current = false;
+    }
+    setShowCalendar(false);
   }
 
   function handleShare() {
@@ -582,29 +769,92 @@ export default function PlayPage() {
       <div className="flex justify-center gap-2 py-2 shrink-0">
         <button
           className={`text-xs px-4 py-1.5 rounded-full transition-colors font-bold tracking-wider font-body ${mode === "daily" ? "bg-white text-black" : "text-zinc-500 hover:text-white"}`}
-          onClick={() => startNewPuzzle("daily")}
+          onClick={handleDailyClick}
         >
-          DAILY #{dailyNumber}
+          DAILY {getDailyLabel()}
         </button>
         <button
           className={`text-xs px-4 py-1.5 rounded-full transition-colors font-bold tracking-wider font-body ${mode === "infinite" ? "bg-white text-black" : "text-zinc-500 hover:text-white"}`}
-          onClick={() => startNewPuzzle("infinite")}
+          onClick={() => handleModeSwitch("infinite")}
         >
           INFINITE
         </button>
         <button
-          className={`text-xs px-4 py-1.5 rounded-full transition-colors font-bold tracking-wider font-body ${mode === "speed" ? "bg-white text-black" : "text-zinc-500 hover:text-white"}`}
-          onClick={() => startNewPuzzle("speed")}
+          className={`relative text-xs px-4 py-1.5 rounded-full transition-colors font-bold tracking-wider font-body ${
+            mode === "speed"
+              ? "bg-white text-black ring-2 ring-[#538d4e] ring-offset-1 ring-offset-[#060606]"
+              : "text-zinc-500 hover:text-white"
+          }`}
+          onClick={() => handleModeSwitch("speed")}
         >
+          {mode === "speed" && (
+            <svg className="inline-block w-3 h-3 mr-1 -mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          )}
           SPEED ⚡
         </button>
       </div>
 
+      {showCalendar && mode === "daily" && (
+        <div className="px-4 py-2 shrink-0">
+          <DailyCalendar onSelectDate={handleCalendarSelect} />
+        </div>
+      )}
+
       {speedTimeRemaining && (
-        <div className="flex justify-center py-1 shrink-0">
-          <span className={`font-mono text-lg font-bold tracking-wider ${speedTimeRemaining.critical ? "text-red-400" : "text-white"}`}>
-            {speedTimeRemaining.display}
-          </span>
+        <div className="flex justify-center px-4 py-1.5 shrink-0">
+          <div className="max-w-[320px] w-full">
+            {hideTimer ? (
+              <div className="flex items-center justify-center gap-2">
+                <span className="text-zinc-600 text-xs font-mono">Timer hidden</span>
+                <button
+                  onClick={() => { setHideTimer(false); localStorage.setItem("lexis_hide_timer", "false"); }}
+                  className="text-zinc-600 hover:text-white p-0.5 transition-colors"
+                  aria-label="Show timer"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <div className="flex-1 h-2 bg-white/[0.06] rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-200 ${
+                      speedTimeRemaining.progress > 0.5
+                        ? "bg-[#538d4e]"
+                        : speedTimeRemaining.progress > 0.25
+                        ? "bg-yellow-500"
+                        : "bg-red-500"
+                    }`}
+                    style={{ width: `${speedTimeRemaining.progress * 100}%` }}
+                  />
+                </div>
+                <span className={`font-mono text-sm font-bold tabular-nums min-w-[72px] text-right ${
+                  speedTimeRemaining.progress > 0.5
+                    ? "text-[#538d4e]"
+                    : speedTimeRemaining.progress > 0.25
+                    ? "text-yellow-500"
+                    : "text-red-500"
+                }`}>
+                  {speedTimeRemaining.display}
+                </span>
+                <button
+                  onClick={() => { setHideTimer(true); localStorage.setItem("lexis_hide_timer", "true"); }}
+                  className="text-zinc-500 hover:text-white p-0.5 transition-colors"
+                  aria-label="Hide timer"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                  </svg>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

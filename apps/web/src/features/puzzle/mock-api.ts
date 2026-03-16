@@ -109,3 +109,17 @@ export function createDailyPuzzle(): MockPuzzle {
     invalidGuess: false
   };
 }
+
+export function createDailyPuzzleForDate(date: Date): MockPuzzle {
+  const solution = wordService.getDailySolutionForDate(date);
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  return {
+    id: `daily-${date.getFullYear()}-${mm}-${dd}`,
+    solution,
+    attempts: 0,
+    rows: [],
+    status: "playing",
+    invalidGuess: false,
+  };
+}

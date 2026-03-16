@@ -8,6 +8,7 @@ import { createClient } from "../../utils/supabase/client";
 import { ProfileService, type UserProfile } from "../../services/ProfileService";
 import { MusicToggle } from "../../components/global/MusicPlayer";
 import { useToast } from "../../components/global/GlobalToast";
+import { AvatarPicker, UserAvatar } from "../../components/ui/avatars";
 
 const supabase = createClient();
 const profileService = new ProfileService(supabase);
@@ -63,6 +64,7 @@ export default function SettingsPage() {
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   const [checkingUsername, setCheckingUsername] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null);
 
   const [hardMode, setHardMode] = useState(false);
   const [highContrast, setHighContrast] = useState(false);
@@ -78,6 +80,7 @@ export default function SettingsPage() {
         setDisplayName(p.display_name || "");
         setUsername(p.username || "");
         setBio(p.bio || "");
+        setSelectedAvatar(p.avatar_url || null);
       }
     });
   }, [user]);
@@ -122,6 +125,7 @@ export default function SettingsPage() {
         id: user.id,
         display_name: displayName.trim(),
         bio: bio.trim(),
+        avatar_url: selectedAvatar || undefined,
       });
       if (username && username !== profile?.username) {
         const { error } = await profileService.setUsername(user.id, username.toLowerCase());
@@ -174,6 +178,11 @@ export default function SettingsPage() {
         {/* Profile */}
         <SectionCard title="Profile">
           <div className="space-y-4">
+            <div className="flex flex-col items-center mb-2">
+              <UserAvatar avatarId={selectedAvatar} displayName={displayName || user.email} size={64} className="mb-3" />
+              <p className="text-xs text-zinc-500 font-body mb-3">Choose your avatar</p>
+              <AvatarPicker selected={selectedAvatar} onSelect={setSelectedAvatar} />
+            </div>
             <div>
               <label className="block text-xs font-body text-zinc-400 mb-1.5">Display Name</label>
               <input

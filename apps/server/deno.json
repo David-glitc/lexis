@@ -1,11 +1,24 @@
 {
-  "tasks": {
-    "dev": "deno run --watch --allow-net --allow-env --unstable-kv main.ts",
-    "start": "deno run --allow-net --allow-env --unstable-kv main.ts",
-    "check": "deno check main.ts"
-  },
-  "compilerOptions": {
-    "lib": ["deno.window", "dom", "esnext"],
-    "strict": true
-  }
+    "tasks": {
+        "dev": "deno run --watch --allow-net --allow-env --unstable-kv main.ts",
+        "start": "deno run --allow-net --allow-env --unstable-kv main.ts",
+        "deploy": "deployctl deploy --project=lexis --prod",
+        "check": "deno check main.ts"
+    },
+    "compilerOptions": {
+        "lib": [
+            "deno.window",
+            "dom",
+            "esnext"
+        ],
+        "strict": true
+    },
+    "deploy": {
+        "project": "89c671f4-d378-40a6-9e64-676bb5f79983",
+        "exclude": [
+            "**/node_modules"
+        ],
+        "include": [],
+        "entrypoint": "main.ts"
+    }
 }
