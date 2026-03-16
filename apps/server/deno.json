@@ -1,11 +1,11 @@
 {
   "tasks": {
-    "dev": "deno run --watch --allow-net --allow-env main.ts --port=8000",
-    "start": "deno run --allow-net --allow-env main.ts --port=8000"
+    "dev": "deno run --watch --allow-net --allow-env --unstable-kv main.ts",
+    "start": "deno run --allow-net --allow-env --unstable-kv main.ts",
+    "check": "deno check main.ts"
   },
   "compilerOptions": {
     "lib": ["deno.window", "dom", "esnext"],
     "strict": true
   }
 }
-

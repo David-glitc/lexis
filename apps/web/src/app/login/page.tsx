@@ -2,13 +2,16 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createClient } from "../../utils/supabase/client";
 import { AuthService } from "../../services/AuthService";
+import { ProfileService } from "../../services/ProfileService";
+import { useAuth } from "../../providers/AuthProvider";
 import { LexisLogo } from "../../components/ui/lexis-logo";
-import type { User } from "@supabase/supabase-js";
 
 const supabase = createClient();
 const authService = new AuthService(supabase);
+const profileService = new ProfileService(supabase);
 
 function GoogleIcon() {
   return (
@@ -88,19 +91,158 @@ function OtpInput({ length, value, onChange }: { length: number; value: string; 
   );
 }
 
+function Web3Onboarding({ user, onComplete, onSkip }: {
+  user: { id: string };
+  onComplete: () => void;
+  onSkip: () => void;
+}) {
+  const [displayName, setDisplayName] = useState("");
+  const [username, setUsername] = useState("");
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
+  const [checkingUsername, setCheckingUsername] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!username || !/^[a-z0-9_]{3,20}$/.test(username)) {
+      setUsernameAvailable(null);
+      return;
+    }
+    setCheckingUsername(true);
+    const timer = setTimeout(() => {
+      profileService.isUsernameAvailable(username).then((available) => {
+        setUsernameAvailable(available);
+        setCheckingUsername(false);
+      });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [username]);
+
+  async function handleContinue() {
+    if (!displayName.trim()) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await profileService.upsertProfile({
+        id: user.id,
+        display_name: displayName.trim(),
+      });
+      if (username) {
+        const result = await profileService.setUsername(user.id, username);
+        if (result.error) {
+          setError(result.error);
+          setSubmitting(false);
+          return;
+        }
+      }
+      onComplete();
+    } catch {
+      setError("Something went wrong. Try again.");
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-[#060606] flex items-center justify-center px-6 relative noise">
+      <div className="orb w-[400px] h-[400px] bg-[#538d4e] top-[-100px] right-[-100px]" />
+      <div className="w-full max-w-sm relative z-10">
+        <div className="text-center mb-8">
+          <Link href="/" className="inline-flex items-center gap-2.5 mb-8">
+            <LexisLogo size={32} />
+            <span className="font-display text-lg font-bold tracking-[0.15em] text-white">LEXIS</span>
+          </Link>
+          <h1 className="font-display text-2xl font-bold text-white mb-1">Complete Your Profile</h1>
+          <p className="text-sm text-zinc-400 font-body">Set up your arena identity</p>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-body text-zinc-400 mb-1.5">Display Name</label>
+            <input
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3.5 text-sm text-white outline-none focus:border-[#6abf5e] transition-colors font-body placeholder:text-zinc-600"
+              placeholder="Your display name"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-body text-zinc-400 mb-1.5">Username</label>
+            <div className="relative">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 font-mono text-sm">@</span>
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+                maxLength={20}
+                className="w-full rounded-xl border border-white/10 bg-white/[0.04] pl-8 pr-10 py-3.5 text-sm text-white outline-none focus:border-[#6abf5e] transition-colors font-mono placeholder:text-zinc-600"
+                placeholder="username"
+              />
+              {username && /^[a-z0-9_]{3,20}$/.test(username) && (
+                <span className="absolute right-3 top-1/2 -translate-y-1/2">
+                  {checkingUsername ? (
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
+                  ) : usernameAvailable === true ? (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                  ) : usernameAvailable === false ? (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                  ) : null}
+                </span>
+              )}
+            </div>
+            {username && !/^[a-z0-9_]{3,20}$/.test(username) && (
+              <p className="text-xs text-red-400 font-body mt-1">3-20 characters, a-z, 0-9, underscores only</p>
+            )}
+          </div>
+
+          {error && (
+            <div className="text-sm text-center text-red-400 bg-red-500/10 rounded-xl p-3 border border-red-500/20 font-body">
+              {error}
+            </div>
+          )}
+
+          <button
+            onClick={handleContinue}
+            disabled={submitting || !displayName.trim()}
+            className="w-full py-3.5 bg-white text-black font-bold rounded-full text-sm hover:scale-[1.02] active:scale-95 transition-transform disabled:opacity-50 font-body"
+          >
+            {submitting ? "Setting up..." : "Continue to Arena"}
+          </button>
+          <button
+            onClick={onSkip}
+            className="w-full text-xs text-zinc-500 hover:text-white transition-colors font-body py-2"
+          >
+            Skip for now →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function LoginPage() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [step, setStep] = useState<"email" | "otp">("email");
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [user, setUser] = useState<User | null>(null);
+  const [needsOnboarding, setNeedsOnboarding] = useState<boolean | null>(null);
 
   useEffect(() => {
-    authService.getUser().then(setUser);
-    const { data: { subscription } } = authService.onAuthStateChange(setUser);
-    return () => subscription.unsubscribe();
-  }, []);
+    if (!user) {
+      setNeedsOnboarding(null);
+      return;
+    }
+    if (user.email) {
+      setNeedsOnboarding(false);
+      return;
+    }
+    profileService.getProfile(user.id).then((profile) => {
+      setNeedsOnboarding(!profile?.username);
+    });
+  }, [user]);
 
   async function handleSendOtp() {
     if (!email.trim()) return;
@@ -155,12 +297,29 @@ export default function LoginPage() {
 
   async function handleSignOut() {
     await authService.signOut();
-    setUser(null);
     setStep("email");
     setOtpCode("");
   }
 
-  if (user) {
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#060606] flex items-center justify-center">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/20 border-t-white" />
+      </div>
+    );
+  }
+
+  if (user && needsOnboarding === true) {
+    return (
+      <Web3Onboarding
+        user={user}
+        onComplete={() => router.push("/play")}
+        onSkip={() => router.push("/play")}
+      />
+    );
+  }
+
+  if (user && needsOnboarding === false) {
     return (
       <div className="min-h-screen bg-[#060606] flex items-center justify-center px-6 relative noise">
         <div className="orb w-[400px] h-[400px] bg-[#538d4e] top-[-100px] right-[-100px]" />
@@ -212,7 +371,6 @@ export default function LoginPage() {
           <p className="text-sm text-zinc-400 font-body">Sign in to track progress, compete, and train</p>
         </div>
 
-        {/* Google */}
         <button
           onClick={handleGoogleLogin}
           disabled={submitting}
@@ -222,7 +380,6 @@ export default function LoginPage() {
           Continue with Google
         </button>
 
-        {/* Web3 wallets */}
         <div className="flex gap-3 mb-6">
           <button
             onClick={handleEthereumLogin}
@@ -242,7 +399,6 @@ export default function LoginPage() {
           </button>
         </div>
 
-        {/* Divider */}
         <div className="relative mb-6">
           <div className="absolute inset-0 flex items-center">
             <div className="w-full border-t border-white/[0.06]" />
@@ -252,7 +408,6 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Email OTP flow */}
         {step === "email" ? (
           <div className="space-y-4">
             <input

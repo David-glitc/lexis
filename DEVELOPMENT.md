@@ -182,3 +182,59 @@
 - Auth gate: unauthenticated users see sign-in prompt. Uses `useAuth()` hook from `AuthProvider`.
 - Flash messages for success/error with colored banners.
 
+## 2026-03-16 — Settings Page & Web3 Onboarding
+
+### Settings Page (`/settings`)
+- Created `apps/web/src/app/settings/page.tsx` with five sections: Profile, Account, Game Preferences, Notifications, Data.
+- **Profile**: Display name input, username with `@` prefix and live availability check (debounced 500ms, green check / red X), bio textarea with 160-char counter, save button.
+- **Account**: Read-only email display (falls back to "Web3 Wallet"), auth method badge (Email OTP / Google / Ethereum / Solana), sign out button, link to `/profile`.
+- **Game Preferences**: Hard Mode, Music (`<MusicToggle />`), High Contrast, Keyboard Vibration — all persisted to localStorage.
+- **Notifications**: Challenge notifications and daily reminder toggles — interactive but grayed out with "Coming soon" badges.
+- **Data**: Export data and delete account placeholder buttons using toast notifications.
+- Reusable `Toggle` switch component (w-12 h-6 pill, green when active). Glass card sections with `rounded-2xl border border-white/[0.06] bg-white/[0.03]`.
+- Uses `useAuth()`, `ProfileService`, `useToast()`, `AppShell` layout. Auth gate shows sign-in prompt when not logged in.
+
+### Login Page Web3 Onboarding
+- Updated `apps/web/src/app/login/page.tsx` to use `useAuth()` hook instead of manual `authService.getUser()` / `onAuthStateChange` for user state.
+- Added `Web3Onboarding` component: when a Web3 user signs in (no email) and has no username, shows onboarding flow with display name + username inputs, "Continue to Arena" button, and "Skip for now" link.
+- Onboarding creates/updates profile via `ProfileService.upsertProfile` and sets username via `ProfileService.setUsername`, then redirects to `/play`.
+- Profile check: if user already has a username, skips onboarding and shows normal "Welcome back" screen.
+- All existing login functionality preserved (OTP, Google, Ethereum, Solana).
+
+### Server Logging & Observability — 2026-03-16 22:00
+- Rewrote `apps/server/main.ts` with production-ready features:
+  - `Logger` class with structured JSON logging (`info`, `warn`, `error`, `request` methods)
+  - Request middleware: every request gets a `request_id`, timing, and structured log
+  - `x-request-id` header added to all responses for traceability
+  - Proper CORS handling with `OPTIONS` preflight, configurable via `ALLOWED_ORIGIN` env
+  - Global try/catch error handling returning `{"error":"Internal server error"}` + logged stack
+  - Enhanced `/health` endpoint: returns JSON `{ status, timestamp, version, uptime_ms }`
+  - New `/metrics` endpoint: `{ total_requests, total_errors, uptime_ms, routes }` with per-route stats
+  - Startup log: `{"level":"info","message":"Lexis API server started","port":8000}`
+- Updated `apps/server/deno.json`: added `--unstable-kv` flag, `check` task
+
+### PWA Install Prompt
+- Created `apps/web/src/components/global/PwaInstallPrompt.tsx`: listens for `beforeinstallprompt`, shows a beautiful dark glass bottom toast with "Install Lexis" after 3s delay, respects localStorage dismissal and standalone mode detection.
+- Wired into `Providers.tsx` so it's globally available on all pages.
+
+### Global Toast System
+- Created `apps/web/src/components/global/GlobalToast.tsx`: context-based toast with `ToastProvider` and `useToast()` hook. Stacks up to 3 toasts at top-center, type-based accent bars (green/red/white), auto-dismiss, close button.
+- Wired into `Providers.tsx` wrapping all children.
+
+### Ambient Music Player
+- Created `apps/web/src/components/global/MusicPlayer.tsx`: procedural ambient music using Web Audio API (low sine drone, cycling pad chords, randomized sparkle tones). `MusicToggle` button with green speaker icon when active. State persisted in localStorage.
+
+### Settings Page
+- Created `apps/web/src/app/settings/page.tsx` with five sections:
+  - Profile: display name, username with live availability check, bio with char counter
+  - Account: email display, auth method badge, sign out, profile link
+  - Game Preferences: Hard Mode, Music (MusicToggle), High Contrast, Keyboard Vibration — all localStorage
+  - Notifications: Challenge + daily reminder toggles (grayed-out "Coming soon" foundations)
+  - Data: Export + Delete account placeholder buttons
+- Added Settings to AppShell sidebar navigation
+
+### PWA Enhancements
+- Updated `manifest.webmanifest`: changed start_url to `/play`, theme/bg to `#060606`, added shortcuts (Daily, Training, Leaderboard), `orientation: any`
+- Created `public/sw.js` service worker: precaches core routes, network-first with cache fallback
+- Registered service worker in `layout.tsx` via inline script
+

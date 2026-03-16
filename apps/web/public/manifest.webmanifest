@@ -2,17 +2,43 @@
   "name": "Lexis — The Infinite Word Puzzle Arena",
   "short_name": "Lexis",
   "description": "A competitive word puzzle platform. Think Faster. Guess Smarter. Rise Higher.",
-  "start_url": "/",
+  "start_url": "/play",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#121213",
-  "theme_color": "#121213",
-  "orientation": "portrait",
-  "categories": ["games", "education"],
+  "background_color": "#060606",
+  "theme_color": "#060606",
+  "orientation": "any",
+  "categories": ["games", "education", "entertainment"],
+  "lang": "en",
+  "dir": "ltr",
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/favicon.svg",
       "sizes": "any",
-      "type": "image/svg+xml"
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Play Daily Puzzle",
+      "short_name": "Daily",
+      "url": "/play",
+      "icons": [{ "src": "/favicon.svg", "sizes": "any" }]
+    },
+    {
+      "name": "Training Mode",
+      "short_name": "Train",
+      "url": "/hints",
+      "icons": [{ "src": "/favicon.svg", "sizes": "any" }]
+    },
+    {
+      "name": "Leaderboard",
+      "short_name": "Ranks",
+      "url": "/leaderboard",
+      "icons": [{ "src": "/favicon.svg", "sizes": "any" }]
     }
   ]
 }
