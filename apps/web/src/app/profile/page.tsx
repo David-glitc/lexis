@@ -9,6 +9,7 @@ import { PointsService } from "../../services/PointsService";
 import { PuzzleService, type PuzzleResult } from "../../services/PuzzleService";
 import { AppShell } from "../../components/layout/app-shell";
 import { Button } from "../../components/ui/button";
+import { UserAvatar } from "../../components/ui/avatars";
 
 const supabase = createClient();
 const profileService = new ProfileService(supabase);
@@ -220,18 +221,19 @@ export default function ProfilePage() {
     <AppShell header={pageHeader}>
       <div className="space-y-6 pt-4">
         <div className="text-center">
-          <div className="w-20 h-20 rounded-2xl bg-white/[0.06] border border-white/10 flex items-center justify-center mx-auto mb-3">
-            <span className="text-3xl text-white font-display font-bold">
-              {(profile?.display_name?.[0] ?? user.email?.[0] ?? "?").toUpperCase()}
-            </span>
-          </div>
+          <UserAvatar
+            avatarId={profile?.avatar_url}
+            displayName={profile?.display_name || user.email}
+            size={80}
+            className="mx-auto mb-3"
+          />
           {editing ? (
             <div className="space-y-3 max-w-xs mx-auto">
               <input
                 type="text"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm text-white outline-none focus:border-[#6abf5e] font-body transition-colors"
+                className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none focus:border-[#6abf5e] font-body transition-colors"
                 placeholder="Display name"
               />
               <div>
@@ -242,7 +244,7 @@ export default function ProfilePage() {
                     setUsername(e.target.value);
                     setUsernameError("");
                   }}
-                  className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm text-white outline-none focus:border-[#6abf5e] font-body transition-colors"
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none focus:border-[#6abf5e] font-body transition-colors"
                   placeholder="Username"
                 />
                 <p className="text-[10px] text-zinc-600 mt-1 text-left">3-20 chars, a-z, 0-9, _</p>
@@ -252,28 +254,25 @@ export default function ProfilePage() {
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
                 rows={2}
-                className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm text-white outline-none focus:border-[#6abf5e] resize-none font-body transition-colors"
+                className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none focus:border-[#6abf5e] resize-none font-body transition-colors"
                 placeholder="Short bio..."
               />
               <div className="flex gap-2">
-                <Button size="sm" fullWidth onClick={handleSaveProfile}>Save</Button>
-                <Button size="sm" variant="ghost" fullWidth onClick={() => { setEditing(false); setUsernameError(""); }}>Cancel</Button>
+                <Button size="md" fullWidth onClick={handleSaveProfile}>Save</Button>
+                <Button size="md" variant="ghost" fullWidth onClick={() => { setEditing(false); setUsernameError(""); }}>Cancel</Button>
               </div>
             </div>
           ) : (
             <>
               <h1 className="text-xl text-white font-display font-bold">{profile?.display_name ?? user.email?.split("@")[0]}</h1>
-              {profile?.username && <p className="text-xs text-zinc-500">@{profile.username}</p>}
-              <p className="text-xs text-zinc-500 mb-1">{user.email}</p>
-              {profile?.bio && <p className="text-sm text-zinc-400 mb-2">{profile.bio}</p>}
-              <div className="flex items-center justify-center gap-2 mb-2">
+              {profile?.username && <p className="text-xs text-zinc-500 mt-0.5">@{profile.username}</p>}
+              <p className="text-xs text-zinc-500 mt-0.5 mb-1">{user.email}</p>
+              {profile?.bio && <p className="text-sm text-zinc-400 mt-1 mb-2 max-w-xs mx-auto">{profile.bio}</p>}
+              <div className="flex items-center justify-center gap-3 mt-2 mb-2">
                 <TierBadge tier={tier} />
-                <button
-                  onClick={() => setEditing(true)}
-                  className="text-xs text-zinc-500 hover:text-white transition-colors"
-                >
-                  Edit
-                </button>
+                <Link href="/settings">
+                  <Button size="sm" variant="secondary">Edit Profile</Button>
+                </Link>
               </div>
             </>
           )}

@@ -172,25 +172,38 @@ function ChallengeCard({
   );
 }
 
+type ChallengeMode = "friend" | "solo";
+
 function CreateChallengeModal({
   friends,
+  userId,
   onSend,
+  onSolo,
   onClose,
 }: {
   friends: FriendWithProfile[];
+  userId: string;
   onSend: (friendId: string, timeLimit?: number) => Promise<void>;
+  onSolo: (timeLimit?: number) => Promise<void>;
   onClose: () => void;
 }) {
+  const [mode, setMode] = useState<ChallengeMode>("solo");
   const [selectedFriend, setSelectedFriend] = useState<string | null>(null);
   const [timeOption, setTimeOption] = useState<TimeLimitOption>("standard");
   const [sending, setSending] = useState(false);
 
   async function handleSend() {
-    if (!selectedFriend) return;
     setSending(true);
-    await onSend(selectedFriend, TIME_LIMITS[timeOption].seconds);
+    if (mode === "solo") {
+      await onSolo(TIME_LIMITS[timeOption].seconds);
+    } else {
+      if (!selectedFriend) { setSending(false); return; }
+      await onSend(selectedFriend, TIME_LIMITS[timeOption].seconds);
+    }
     setSending(false);
   }
+
+  const canSend = mode === "solo" || !!selectedFriend;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
@@ -210,13 +223,35 @@ function CreateChallengeModal({
         </div>
 
         <div className="mb-4">
-          <label className="mb-2 block font-body text-xs font-medium text-zinc-400">Challenge Type</label>
+          <label className="mb-2 block font-body text-xs font-medium text-zinc-400">Challenge Mode</label>
+          <div className="flex gap-2">
+            {([
+              { key: "solo" as ChallengeMode, label: "Solo Practice" },
+              { key: "friend" as ChallengeMode, label: "vs Friend" },
+            ]).map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setMode(key)}
+                className={`flex-1 rounded-lg py-2.5 text-xs font-body font-medium transition-colors ${
+                  mode === key
+                    ? "bg-white text-black"
+                    : "border border-white/[0.06] bg-white/[0.04] text-zinc-400 hover:text-white"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mb-4">
+          <label className="mb-2 block font-body text-xs font-medium text-zinc-400">Time Limit</label>
           <div className="flex gap-2">
             {(Object.entries(TIME_LIMITS) as [TimeLimitOption, { label: string }][]).map(([key, { label }]) => (
               <button
                 key={key}
                 onClick={() => setTimeOption(key)}
-                className={`flex-1 rounded-lg py-2 text-xs font-body font-medium transition-colors ${
+                className={`flex-1 rounded-lg py-2.5 text-xs font-body font-medium transition-colors ${
                   timeOption === key
                     ? "bg-white text-black"
                     : "border border-white/[0.06] bg-white/[0.04] text-zinc-400 hover:text-white"
@@ -228,53 +263,62 @@ function CreateChallengeModal({
           </div>
         </div>
 
-        <div className="mb-5">
-          <label className="mb-2 block font-body text-xs font-medium text-zinc-400">Pick a Friend</label>
-          {friends.length === 0 ? (
-            <div className="py-8 text-center">
-              <p className="font-body text-sm text-zinc-500">No friends yet</p>
-              <Link href="/friends" className="mt-2 inline-block font-body text-xs text-[#6abf5e] hover:underline">
-                Find friends
-              </Link>
-            </div>
-          ) : (
-            <div className="max-h-52 space-y-1.5 overflow-y-auto pr-1">
-              {friends.map((f) => (
-                <button
-                  key={f.friend_id}
-                  onClick={() => setSelectedFriend(f.friend_id)}
-                  className={`flex w-full items-center gap-3 rounded-xl p-3 text-left transition-colors ${
-                    selectedFriend === f.friend_id
-                      ? "border border-white/20 bg-white/[0.08]"
-                      : "border border-transparent bg-white/[0.03] hover:bg-white/[0.06]"
-                  }`}
-                >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.06]">
-                    <span className="font-display text-xs font-bold text-white">
-                      {(f.display_name[0] ?? "?").toUpperCase()}
-                    </span>
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-body text-sm font-medium text-white">{f.display_name}</div>
-                    <div className="font-mono text-[10px] uppercase tracking-wider text-zinc-500">{f.ranking_tier}</div>
-                  </div>
-                  {selectedFriend === f.friend_id && (
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6abf5e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        {mode === "friend" && (
+          <div className="mb-5">
+            <label className="mb-2 block font-body text-xs font-medium text-zinc-400">Pick a Friend</label>
+            {friends.length === 0 ? (
+              <div className="py-8 text-center">
+                <p className="font-body text-sm text-zinc-500">No friends yet</p>
+                <Link href="/friends" className="mt-2 inline-block font-body text-xs text-[#6abf5e] hover:underline">
+                  Find friends
+                </Link>
+              </div>
+            ) : (
+              <div className="max-h-52 space-y-1.5 overflow-y-auto pr-1">
+                {friends.map((f) => (
+                  <button
+                    key={f.friend_id}
+                    onClick={() => setSelectedFriend(f.friend_id)}
+                    className={`flex w-full items-center gap-3 rounded-xl p-3 text-left transition-colors ${
+                      selectedFriend === f.friend_id
+                        ? "border border-white/20 bg-white/[0.08]"
+                        : "border border-transparent bg-white/[0.03] hover:bg-white/[0.06]"
+                    }`}
+                  >
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.06]">
+                      <span className="font-display text-xs font-bold text-white">
+                        {(f.display_name[0] ?? "?").toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-body text-sm font-medium text-white">{f.display_name}</div>
+                      <div className="font-mono text-[10px] uppercase tracking-wider text-zinc-500">{f.ranking_tier}</div>
+                    </div>
+                    {selectedFriend === f.friend_id && (
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6abf5e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {mode === "solo" && (
+          <div className="mb-5 rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 text-center">
+            <p className="font-body text-sm text-zinc-400">Challenge yourself with a random puzzle.</p>
+            <p className="mt-1 font-mono text-[10px] text-zinc-600">Points are awarded on completion.</p>
+          </div>
+        )}
 
         <Button
           fullWidth
-          disabled={!selectedFriend || sending}
+          disabled={!canSend || sending}
           onClick={handleSend}
         >
-          {sending ? "Sending…" : "Send Challenge"}
+          {sending ? "Starting…" : mode === "solo" ? "Start Challenge" : "Send Challenge"}
         </Button>
       </div>
     </div>
@@ -351,6 +395,19 @@ export default function ChallengesPage() {
       setShowModal(false);
       loadData(user.id);
     }
+  }
+
+  async function handleSoloChallenge(timeLimit?: number) {
+    if (!user) return;
+    const word = wordService.getRandomSolution();
+    const { id, error } = await friendsService.sendChallenge(user.id, user.id, word, timeLimit);
+    if (error || !id) {
+      flash(error ?? "Failed to create challenge", "error");
+      return;
+    }
+    await supabase.from("challenges").update({ status: "active" }).eq("id", id);
+    setShowModal(false);
+    router.push(`/play?challenge=${id}`);
   }
 
   const active = challenges.filter((c) => c.status === "active");
@@ -475,10 +532,12 @@ export default function ChallengesPage() {
         </div>
       )}
 
-      {showModal && (
+      {showModal && user && (
         <CreateChallengeModal
           friends={friends}
+          userId={user.id}
           onSend={handleSendChallenge}
+          onSolo={handleSoloChallenge}
           onClose={() => setShowModal(false)}
         />
       )}
