@@ -129,7 +129,7 @@ export class DailyChallengeService {
         won,
         status: won ? "won" : "lost",
         created_at: new Date().toISOString(),
-      }).catch(() => {});
+      });
 
       return { withinTimeLimit, pointsAwarded, error: null };
     } catch {
