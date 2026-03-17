@@ -416,3 +416,25 @@
 - Added global bottom navigation bar matching all other pages (Play, Training, Challenges, Leaderboard, Profile)
 - Keyboard area has bottom margin to clear the nav bar on mobile
 
+---
+
+## 2026-03-16 — UI Polish, Type Fix, Profile Avatar, Solo Challenges
+
+### NotificationService Type Fix
+- Changed `urlBase64ToUint8Array` return type from `Uint8Array` to `ArrayBuffer` to fix TypeScript strict type incompatibility with `applicationServerKey` (which expects `BufferSource | string | null`)
+- The `Uint8Array<ArrayBufferLike>` was not assignable to `ArrayBufferView<ArrayBuffer>` due to `SharedArrayBuffer` incompatibility
+
+### Profile Page — Avatar & Details
+- Profile page now renders the user's chosen avatar via the `UserAvatar` component (shows SVG avatar or letter fallback)
+- "Edit" text link replaced with a proper "Edit Profile" button that links to `/settings`
+- Input fields given slightly more padding for better touch targets
+
+### Button Sizes — Global Fix
+- All `Button` sizes (`sm`, `md`, `lg`) updated with `min-h` constraints for consistent, accessible tap targets
+- `sm`: min-h 36px, `md`: min-h 42px, `lg`: min-h 48px
+
+### Challenges — Solo Practice Mode
+- `CreateChallengeModal` now supports two modes: "Solo Practice" and "vs Friend"
+- Solo mode creates a self-challenge (challenger === challenged), auto-accepts it, and navigates directly to `/play?challenge=<id>`
+- Time limit selection separated into its own section for clarity in both modes
+
