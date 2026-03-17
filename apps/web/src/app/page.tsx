@@ -172,6 +172,11 @@ export default function HomePage() {
             <Link href="/login" className="text-sm text-zinc-400 hover:text-white transition-colors duration-300 hidden sm:block font-body">
               Sign in
             </Link>
+            <Link href="/login" className="sm:hidden">
+              <button className="px-4 py-2 text-xs font-medium rounded-full border border-white/20 text-zinc-200 hover:bg-white/10 transition-colors font-body">
+                Sign in
+              </button>
+            </Link>
             <Link href="/play">
               <button className="relative px-5 py-2 text-sm font-semibold text-black bg-white rounded-full overflow-hidden group font-body">
                 <span className="relative z-10">Play Now</span>
@@ -252,6 +257,9 @@ export default function HomePage() {
             <h2 className="font-display text-4xl sm:text-5xl font-bold mt-3">
               Train. Compete.<br />Master.
             </h2>
+            <p className="mt-3 text-zinc-400 text-sm max-w-xl mx-auto font-body">
+              Version 1 is a pure competitive word arena. Version 2 teases referrals, optional wagers, and crypto-powered challenge ladders — built for serious solvers, not whales.
+            </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4 stagger">
@@ -316,6 +324,9 @@ export default function HomePage() {
                   <h3 className="font-display text-2xl font-bold mb-2">Progress Analytics</h3>
                   <p className="text-zinc-400 text-sm leading-relaxed max-w-md font-body">
                     Detailed statistics reveal your strengths and blind spots. Watch your speed, accuracy, and pattern recognition improve over time.
+                  </p>
+                  <p className="mt-3 text-zinc-500 text-xs font-body">
+                    Coming in Version 2: friend referral rewards and optional high-stakes challenge ladders powered by crypto — always opt-in, never pay-to-win.
                   </p>
                 </div>
                 <div className="flex gap-3 items-end">
