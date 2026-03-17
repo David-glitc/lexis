@@ -296,3 +296,30 @@
 - Signed-in users auto-redirect from landing page (`/`) to `/play`
 - Shows spinner while checking auth state
 
+## [2026-03-16T19:00Z] Speed Mode, Daily Puzzle Guards, Data Flow Fixes
+
+### Speed Mode Functional
+- Timer now acts as a real countdown: when time expires, puzzle auto-transitions to "lost" state
+- "Time's up!" toast with revealed word shown on timeout
+- Speed timeout triggers `puzzleService.finishPuzzle(false)` and submits result to backend
+- Fallback if speed challenge fails to load from DB — creates a local puzzle instead
+- Error handling with `.catch()` on all DB calls to prevent blocking
+
+### Daily Puzzle Once-Per-Day Guard
+- Daily puzzles now use date-keyed IDs (`daily-YYYY-MM-DD`) instead of generic `"daily"`
+- Game state (rows, attempts, status) saved to localStorage after each guess via `saveDailyState()`
+- On load/switch to daily mode, `loadDailyWithState()` restores saved progress
+- Completed dailies show final board state + auto-open stats modal
+- `handleKey` blocks input when `puzzle.status !== "playing"` (already existed)
+- Calendar selection also restores saved state for past dailies
+
+### Calendar Date Selection
+- Selecting a past date loads that day's deterministic puzzle via `createDailyPuzzleForDate(date)`
+- If the puzzle was previously played, saved state is restored from localStorage
+- Today's date selection reuses `loadDailyWithState()` for consistency
+
+### Non-Blocking DB Requests
+- All `awardPoints()` and `submitResult()` calls now use `.catch(() => {})` to fire-and-forget
+- Speed challenge load wrapped in try/catch with user-facing toast fallback
+- Supabase clients created per-action (not stored in component state) to avoid stale references
+

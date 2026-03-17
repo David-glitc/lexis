@@ -190,3 +190,45 @@ CREATE POLICY "Authenticated can create daily challenges" ON daily_challenges FO
 
 -- Add time_limit to challenges table
 ALTER TABLE challenges ADD COLUMN IF NOT EXISTS time_limit_seconds INTEGER DEFAULT NULL;
+
+-- =============================================================================
+-- Profiles: preferences column
+-- =============================================================================
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS preferences JSONB DEFAULT '{}';
+
+-- =============================================================================
+-- Puzzle logs: in-progress game state and daily tracking columns
+-- =============================================================================
+ALTER TABLE puzzle_logs ADD COLUMN IF NOT EXISTS guesses TEXT[] DEFAULT '{}';
+ALTER TABLE puzzle_logs ADD COLUMN IF NOT EXISTS puzzle_id TEXT;
+ALTER TABLE puzzle_logs ADD COLUMN IF NOT EXISTS date_key TEXT;
+ALTER TABLE puzzle_logs ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'playing' CHECK (status IN ('playing', 'won', 'lost'));
+
+-- =============================================================================
+-- Puzzle logs: mode check constraint (add daily_speed and speed)
+-- =============================================================================
+ALTER TABLE puzzle_logs DROP CONSTRAINT IF EXISTS puzzle_logs_mode_check;
+ALTER TABLE puzzle_logs ADD CONSTRAINT puzzle_logs_mode_check CHECK (mode IN ('daily', 'infinite', 'challenge', 'daily_speed', 'speed'));
+
+-- =============================================================================
+-- Puzzle logs: indexes for new columns
+-- =============================================================================
+CREATE INDEX IF NOT EXISTS idx_puzzle_logs_puzzle_id ON puzzle_logs(puzzle_id);
+CREATE INDEX IF NOT EXISTS idx_puzzle_logs_date_key ON puzzle_logs(date_key);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_puzzle_logs_user_date ON puzzle_logs(user_id, date_key) WHERE date_key IS NOT NULL AND mode = 'daily';
+
+-- =============================================================================
+-- Push subscriptions: web push notifications
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  endpoint TEXT NOT NULL,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(user_id, endpoint)
+);
+
+ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can manage own subscriptions" ON push_subscriptions FOR ALL USING (auth.uid() = user_id);

@@ -19,6 +19,26 @@ import { createClient } from "../../utils/supabase/client";
 import { PointsService } from "../../services/PointsService";
 import { DailyChallengeService, type DailyChallenge } from "../../services/DailyChallengeService";
 
+function isDailyCompleted(dateKey?: string): boolean {
+  const key = dateKey ?? formatDateKey(new Date());
+  return getDailyHistory().some((h) => h.date === key);
+}
+
+function getDailySavedState(puzzleId: string): { rows: MockPuzzle["rows"]; attempts: number; status: MockPuzzle["status"]; guesses: string[] } | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(`lexis_daily_state_${puzzleId}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function saveDailyState(puzzleId: string, rows: MockPuzzle["rows"], attempts: number, status: MockPuzzle["status"], guesses: string[]) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(`lexis_daily_state_${puzzleId}`, JSON.stringify({ rows, attempts, status, guesses }));
+  } catch { /* quota */ }
+}
+
 function deriveKeyboardState(puzzle: MockPuzzle): KeyboardState {
   const state: KeyboardState = {};
   puzzle.rows.forEach((row) => {
@@ -38,12 +58,13 @@ function deriveKeyboardState(puzzle: MockPuzzle): KeyboardState {
   return state;
 }
 
-function generateShareText(puzzle: MockPuzzle, dailyNumber: number, mode: string, hardMode: boolean): string {
+function generateShareText(puzzle: MockPuzzle, _dailyNumber: number, mode: string, hardMode: boolean): string {
   const attemptsStr = puzzle.status === "won" ? String(puzzle.attempts) : "X";
   const suffix = hardMode ? "*" : "";
   let header: string;
   if (mode === "daily") {
-    header = `Lexis #${dailyNumber} ${attemptsStr}/6${suffix}`;
+    const dateLabel = puzzle.id.startsWith("daily-") ? puzzle.id.replace("daily-", "") : getDailyLabel();
+    header = `Lexis Daily ${dateLabel} ${attemptsStr}/6${suffix}`;
   } else if (mode === "speed") {
     header = `Lexis ⚡ ${attemptsStr}/6${suffix}`;
   } else {
@@ -422,9 +443,18 @@ function SettingsModal({ onClose, hardMode, onToggleHardMode }: {
   );
 }
 
+function loadDailyWithState(): MockPuzzle {
+  const p = createDailyPuzzle();
+  const saved = getDailySavedState(p.id);
+  if (saved) {
+    return { ...p, rows: saved.rows, attempts: saved.attempts, status: saved.status };
+  }
+  return p;
+}
+
 export default function PlayPage() {
   const [mode, setMode] = useState<GameMode>("daily");
-  const [puzzle, setPuzzle] = useState<MockPuzzle>(() => createDailyPuzzle());
+  const [puzzle, setPuzzle] = useState<MockPuzzle>(() => loadDailyWithState());
   const [currentGuess, setCurrentGuess] = useState("");
   const [showToast, setShowToast] = useState<string | null>(null);
   const [showStats, setShowStats] = useState(false);
@@ -442,6 +472,7 @@ export default function PlayPage() {
   const [speedTimer, setSpeedTimer] = useState<number>(0);
   const [speedTimerActive, setSpeedTimerActive] = useState(false);
   const speedStartTime = useRef<number>(0);
+  const speedTimedOut = useRef(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const [hideTimer, setHideTimer] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -453,15 +484,29 @@ export default function PlayPage() {
       puzzleService.startPuzzle(puzzle.id, puzzle.solution);
       puzzleStarted.current = true;
     }
-  }, [puzzle.id, puzzle.solution]);
+    if (puzzle.status !== "playing" && puzzle.rows.length > 0) {
+      const t = setTimeout(() => setShowStats(true), 500);
+      return () => clearTimeout(t);
+    }
+  }, [puzzle.id, puzzle.solution, puzzle.status, puzzle.rows.length]);
 
   useEffect(() => {
     if (!speedTimerActive) return;
+    speedTimedOut.current = false;
     const interval = setInterval(() => {
-      setSpeedTimer(Date.now() - speedStartTime.current);
+      const elapsed = Date.now() - speedStartTime.current;
+      setSpeedTimer(elapsed);
+      if (speedChallenge && elapsed >= speedChallenge.time_limit_seconds * 1000 && !speedTimedOut.current) {
+        speedTimedOut.current = true;
+        setSpeedTimerActive(false);
+        setPuzzle((prev) => {
+          if (prev.status !== "playing") return prev;
+          return { ...prev, status: "lost" };
+        });
+      }
     }, 100);
     return () => clearInterval(interval);
-  }, [speedTimerActive]);
+  }, [speedTimerActive, speedChallenge]);
 
   const dailyNumber = puzzleService.getDailyPuzzleNumber();
 
@@ -470,6 +515,20 @@ export default function PlayPage() {
     setShowToast(msg);
     toastTimeout.current = setTimeout(() => setShowToast(null), duration);
   }, []);
+
+  useEffect(() => {
+    if (!speedTimedOut.current) return;
+    if (puzzle.status !== "lost") return;
+    speedTimedOut.current = false;
+    toast("Time's up! " + puzzle.solution.toUpperCase(), 4000);
+    puzzleService.finishPuzzle(false);
+    if (speedChallenge && user) {
+      const supabase = createClient();
+      const challengeService = new DailyChallengeService(supabase);
+      challengeService.submitResult(user.id, speedChallenge.id, puzzle.attempts, Date.now() - speedStartTime.current, false).catch(() => {});
+    }
+    setTimeout(() => setShowStats(true), 3000);
+  }, [puzzle.status, toast, speedChallenge, user]);
 
   const keyboardState = useMemo(() => deriveKeyboardState(puzzle), [puzzle]);
 
@@ -521,6 +580,15 @@ export default function PlayPage() {
         setRevealingRow(rowIdx);
         setPuzzle(next);
 
+        const dailyDateStr = mode === "daily"
+          ? puzzle.id.replace("daily-", "")
+          : null;
+
+        if (mode === "daily" && dailyDateStr) {
+          const allGuesses = [...puzzleService.getHistory().filter(r => r.puzzleId === puzzle.id).flatMap(r => r.guesses), currentGuess];
+          saveDailyState(`daily-${dailyDateStr}`, next.rows, next.attempts, next.status, allGuesses);
+        }
+
         setTimeout(() => {
           setRevealingRow(undefined);
           if (next.status === "won") {
@@ -530,20 +598,20 @@ export default function PlayPage() {
             puzzleService.finishPuzzle(true);
             setSpeedTimerActive(false);
 
-            if (mode === "daily") {
-              const dateStr = puzzle.id === "daily" ? formatDateKey(new Date()) : puzzle.id.replace("daily-", "");
-              addDailyHistory(dateStr, true);
+            if (mode === "daily" && dailyDateStr) {
+              addDailyHistory(dailyDateStr, true);
+              saveDailyState(`daily-${dailyDateStr}`, next.rows, next.attempts, next.status, []);
             }
 
             if (user) {
               const supabase = createClient();
               const points = PointsService.getPointsForGuesses(next.attempts);
               const pointsService = new PointsService(supabase);
-              pointsService.awardPoints(user.id, points, "puzzle_win", { mode, attempts: next.attempts });
+              pointsService.awardPoints(user.id, points, "puzzle_win", { mode, attempts: next.attempts }).catch(() => {});
 
               if (mode === "speed" && speedChallenge) {
                 const challengeService = new DailyChallengeService(supabase);
-                challengeService.submitResult(user.id, speedChallenge.id, next.attempts, Date.now() - speedStartTime.current, true);
+                challengeService.submitResult(user.id, speedChallenge.id, next.attempts, Date.now() - speedStartTime.current, true).catch(() => {});
               }
             }
 
@@ -556,15 +624,15 @@ export default function PlayPage() {
             puzzleService.finishPuzzle(false);
             setSpeedTimerActive(false);
 
-            if (mode === "daily") {
-              const dateStr = puzzle.id === "daily" ? formatDateKey(new Date()) : puzzle.id.replace("daily-", "");
-              addDailyHistory(dateStr, false);
+            if (mode === "daily" && dailyDateStr) {
+              addDailyHistory(dailyDateStr, false);
+              saveDailyState(`daily-${dailyDateStr}`, next.rows, next.attempts, next.status, []);
             }
 
             if (mode === "speed" && speedChallenge && user) {
               const supabase = createClient();
               const challengeService = new DailyChallengeService(supabase);
-              challengeService.submitResult(user.id, speedChallenge.id, next.attempts, Date.now() - speedStartTime.current, false);
+              challengeService.submitResult(user.id, speedChallenge.id, next.attempts, Date.now() - speedStartTime.current, false).catch(() => {});
             }
 
             setTimeout(() => setShowStats(true), 3000);
@@ -645,32 +713,54 @@ export default function PlayPage() {
     if (newMode === "speed") {
       const supabase = createClient();
       const challengeService = new DailyChallengeService(supabase);
-      const challenge = await challengeService.getTodayChallenge();
-      setSpeedChallenge(challenge);
-      if (challenge) {
-        const next: MockPuzzle = {
-          id: `speed-${challenge.id}`,
-          solution: challenge.puzzle_word,
-          attempts: 0,
-          rows: [],
-          status: "playing",
-          invalidGuess: false,
-        };
+      try {
+        const challenge = await challengeService.getTodayChallenge();
+        setSpeedChallenge(challenge);
+        if (challenge) {
+          const next: MockPuzzle = {
+            id: `speed-${challenge.id}`,
+            solution: challenge.puzzle_word,
+            attempts: 0,
+            rows: [],
+            status: "playing",
+            invalidGuess: false,
+          };
+          setMode("speed");
+          setPuzzle(next);
+          setCurrentGuess("");
+          setRevealingRow(undefined);
+          setBounceRow(undefined);
+          puzzleStarted.current = false;
+          speedStartTime.current = Date.now();
+          setSpeedTimer(0);
+          setSpeedTimerActive(true);
+        } else {
+          toast("Speed challenge unavailable");
+        }
+      } catch {
+        toast("Could not load speed challenge");
+        const fallback = createMockPuzzle();
         setMode("speed");
-        setPuzzle(next);
+        setPuzzle(fallback);
         setCurrentGuess("");
-        setRevealingRow(undefined);
-        setBounceRow(undefined);
         puzzleStarted.current = false;
-        speedStartTime.current = Date.now();
-        setSpeedTimer(0);
-        setSpeedTimerActive(true);
       }
       return;
     }
 
-    const next = newMode === "daily" ? createDailyPuzzle() : createMockPuzzle();
-    setMode(newMode);
+    if (newMode === "daily") {
+      const p = loadDailyWithState();
+      setMode("daily");
+      setPuzzle(p);
+      setCurrentGuess("");
+      setRevealingRow(undefined);
+      setBounceRow(undefined);
+      puzzleStarted.current = false;
+      return;
+    }
+
+    const next = createMockPuzzle();
+    setMode("infinite");
     setPuzzle(next);
     setCurrentGuess("");
     setRevealingRow(undefined);
@@ -698,17 +788,24 @@ export default function PlayPage() {
     const sel = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     if (sel.getTime() === todayStart.getTime()) {
       startNewPuzzle("daily");
-    } else {
-      setSpeedTimerActive(false);
-      setSpeedChallenge(null);
-      const p = createDailyPuzzleForDate(date);
-      setMode("daily");
-      setPuzzle(p);
-      setCurrentGuess("");
-      setRevealingRow(undefined);
-      setBounceRow(undefined);
-      puzzleStarted.current = false;
+      setShowCalendar(false);
+      return;
     }
+    setSpeedTimerActive(false);
+    setSpeedChallenge(null);
+    const p = createDailyPuzzleForDate(date);
+    const dateKey = formatDateKey(date);
+    const saved = getDailySavedState(`daily-${dateKey}`) ?? getDailySavedState(p.id);
+    if (saved) {
+      setPuzzle({ ...p, rows: saved.rows, attempts: saved.attempts, status: saved.status });
+    } else {
+      setPuzzle(p);
+    }
+    setMode("daily");
+    setCurrentGuess("");
+    setRevealingRow(undefined);
+    setBounceRow(undefined);
+    puzzleStarted.current = false;
     setShowCalendar(false);
   }
 
