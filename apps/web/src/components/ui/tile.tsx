@@ -42,7 +42,12 @@ export function Tile({ state = "empty", children, animDelay = 0, flip, bounce, p
   return (
     <div
       className={clsx(
-        "inline-flex items-center justify-center w-[62px] h-[62px] text-[2rem] font-bold uppercase leading-none select-none",
+        // Responsive tile sizing: fits small phones + short landscape screens without breaking the layout.
+        "inline-flex items-center justify-center font-bold uppercase leading-none select-none",
+        "w-[44px] h-[44px] text-[1.35rem]",
+        "min-[380px]:w-[48px] min-[380px]:h-[48px] min-[380px]:text-[1.5rem]",
+        "sm:w-[52px] sm:h-[52px] sm:text-[1.7rem]",
+        "md:w-[62px] md:h-[62px] md:text-[2rem]",
         bg[state],
         border[state],
         text[state],

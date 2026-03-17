@@ -816,7 +816,7 @@ export default function PlayPage() {
   return (
     <div className="h-[100dvh] flex flex-col bg-[#060606] relative noise">
       {/* Header */}
-      <header className="flex items-center justify-between px-4 h-[50px] border-b border-white/[0.06] shrink-0 backdrop-blur-xl bg-[#060606]/80">
+      <header className="flex items-center justify-between px-3 sm:px-4 h-[48px] sm:h-[52px] border-b border-white/[0.06] shrink-0 backdrop-blur-xl bg-[#060606]/80">
         <div className="flex items-center gap-1">
           <button
             className="p-1.5 text-zinc-400 hover:text-white transition-colors"
@@ -876,21 +876,21 @@ export default function PlayPage() {
       )}
 
       {/* Mode selector */}
-      <div className="flex justify-center gap-2 py-2 shrink-0">
+      <div className="flex justify-center flex-wrap gap-2 px-3 sm:px-4 py-2 shrink-0">
         <button
-          className={`text-xs px-4 py-1.5 rounded-full transition-colors font-bold tracking-wider font-body ${mode === "daily" ? "bg-white text-black" : "text-zinc-500 hover:text-white"}`}
+          className={`text-xs px-3 sm:px-4 py-1.5 rounded-full transition-colors font-bold tracking-wider font-body ${mode === "daily" ? "bg-white text-black" : "text-zinc-500 hover:text-white"}`}
           onClick={handleDailyClick}
         >
           DAILY {getDailyLabel()}
         </button>
         <button
-          className={`text-xs px-4 py-1.5 rounded-full transition-colors font-bold tracking-wider font-body ${mode === "infinite" ? "bg-white text-black" : "text-zinc-500 hover:text-white"}`}
+          className={`text-xs px-3 sm:px-4 py-1.5 rounded-full transition-colors font-bold tracking-wider font-body ${mode === "infinite" ? "bg-white text-black" : "text-zinc-500 hover:text-white"}`}
           onClick={() => handleModeSwitch("infinite")}
         >
           INFINITE
         </button>
         <button
-          className={`relative text-xs px-4 py-1.5 rounded-full transition-colors font-bold tracking-wider font-body ${
+          className={`relative text-xs px-3 sm:px-4 py-1.5 rounded-full transition-colors font-bold tracking-wider font-body ${
             mode === "speed"
               ? "bg-white text-black ring-2 ring-[#538d4e] ring-offset-1 ring-offset-[#060606]"
               : "text-zinc-500 hover:text-white"
@@ -969,8 +969,8 @@ export default function PlayPage() {
       )}
 
       {/* Board */}
-      <div className="flex-1 flex items-center justify-center overflow-hidden">
-        <div className={shakeRow && puzzle.status === "playing" ? "animate-shake" : ""}>
+      <div className="flex-1 min-h-0 flex items-center justify-center overflow-hidden px-3 sm:px-4">
+        <div className={shakeRow && puzzle.status === "playing" ? "animate-shake" : ""} style={{ touchAction: "manipulation" }}>
           <Board
             rows={composedRows}
             revealingRow={revealingRow}
@@ -981,7 +981,7 @@ export default function PlayPage() {
       </div>
 
       {/* Keyboard */}
-      <div className="shrink-0 px-2 pb-2 pt-1 mb-[56px] md:mb-0">
+      <div className="shrink-0 px-2 sm:px-3 pb-2 pt-1 mb-[calc(env(safe-area-inset-bottom)+64px)] md:mb-0">
         {puzzle.status !== "playing" ? (
           <div className="flex gap-2 max-w-[500px] mx-auto mb-2">
             <Button fullWidth size="lg" variant="secondary" onClick={() => startNewPuzzle("daily")}>

@@ -452,3 +452,9 @@
 - Centralized public site URL resolution (prefers `NEXT_PUBLIC_SITE_URL` / `NEXT_PUBLIC_VERCEL_URL`)
 - Google OAuth `redirectTo` and email OTP `emailRedirectTo` now point to `<site>/auth/callback` to avoid falling back to localhost in production
 
+### Play + Mobile Layout Responsiveness
+- Tile sizing now uses `min-[380px]` breakpoint instead of non-standard `xs:` prefix
+- Keyboard key heights scale by breakpoint to fit short screens (44px → 52px → 58px)
+- Play mode selector wraps on narrow screens and uses smaller horizontal padding
+- Keyboard bottom spacing now accounts for safe-area + bottom nav: `mb-[calc(env(safe-area-inset-bottom)+64px)]`
+

@@ -35,9 +35,9 @@ export function Board({ rows, maxRows = 6, revealingRow, bounceRow, poppingIndex
   ].slice(0, maxRows);
 
   return (
-    <div className="flex flex-col items-center gap-[5px]">
+    <div className="flex flex-col items-center gap-1.5 sm:gap-[5px]">
       {paddedRows.map((row, rowIndex) => (
-        <div key={row.id} className="flex gap-[5px]">
+        <div key={row.id} className="flex gap-1.5 sm:gap-[5px]">
           {row.letters.map((cell, colIndex) => {
             const hasLetter = cell.letter.trim() !== "";
             const tileState = mapState(cell.state, hasLetter);

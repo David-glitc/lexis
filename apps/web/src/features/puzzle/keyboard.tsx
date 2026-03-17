@@ -40,7 +40,9 @@ function Key({
         "flex items-center justify-center rounded font-bold uppercase select-none cursor-pointer",
         "active:animate-press transition-[background-color] duration-100",
         STATE_CLASSES[state],
-        wide ? "flex-[1.5] text-xs h-[58px] px-1" : "flex-1 text-sm h-[58px]"
+        wide
+          ? "flex-[1.5] text-[11px] sm:text-xs h-[44px] sm:h-[52px] md:h-[58px] px-1"
+          : "flex-1 text-xs sm:text-sm h-[44px] sm:h-[52px] md:h-[58px]"
       )}
     >
       {display ?? label}
@@ -53,18 +55,18 @@ export function Keyboard({ state, onKey }: KeyboardProps) {
   const get = (ch: string): KeyState => s[ch.toLowerCase()] ?? "default";
 
   return (
-    <div className="w-full max-w-[500px] mx-auto select-none">
-      <div className="flex gap-[6px] mb-[8px]">
+    <div className="w-full max-w-[560px] mx-auto select-none">
+      <div className="flex gap-[4px] sm:gap-[6px] mb-[6px] sm:mb-[8px]">
         {ROW1.map((ch) => (
           <Key key={ch} label={ch} state={get(ch)} onClick={() => onKey(ch.toLowerCase())} />
         ))}
       </div>
-      <div className="flex gap-[6px] mb-[8px] px-[5%]">
+      <div className="flex gap-[4px] sm:gap-[6px] mb-[6px] sm:mb-[8px] px-[4%] sm:px-[5%]">
         {ROW2.map((ch) => (
           <Key key={ch} label={ch} state={get(ch)} onClick={() => onKey(ch.toLowerCase())} />
         ))}
       </div>
-      <div className="flex gap-[6px]">
+      <div className="flex gap-[4px] sm:gap-[6px]">
         <Key label="enter" display="ENTER" state={get("enter")} wide onClick={() => onKey("enter")} />
         {ROW3.map((ch) => (
           <Key key={ch} label={ch} state={get(ch)} onClick={() => onKey(ch.toLowerCase())} />
