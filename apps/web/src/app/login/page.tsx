@@ -272,7 +272,7 @@ export default function LoginPage() {
   async function handleGoogleLogin() {
     setSubmitting(true);
     setMessage(null);
-    const { error } = await authService.signInWithGoogle(`${window.location.origin}/play`);
+    const { error } = await authService.signInWithGoogle(`${window.location.origin}/auth/callback`);
     if (error) {
       setMessage(error);
       setSubmitting(false);
