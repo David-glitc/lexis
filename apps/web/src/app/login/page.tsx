@@ -8,6 +8,7 @@ import { AuthService } from "../../services/AuthService";
 import { ProfileService } from "../../services/ProfileService";
 import { useAuth } from "../../providers/AuthProvider";
 import { LexisLogo } from "../../components/ui/lexis-logo";
+import { getPublicSiteUrl } from "../../utils/site-url";
 
 const supabase = createClient();
 const authService = new AuthService(supabase);
@@ -272,7 +273,7 @@ export default function LoginPage() {
   async function handleGoogleLogin() {
     setSubmitting(true);
     setMessage(null);
-    const { error } = await authService.signInWithGoogle(`${window.location.origin}/auth/callback`);
+    const { error } = await authService.signInWithGoogle(`${getPublicSiteUrl()}/auth/callback`);
     if (error) {
       setMessage(error);
       setSubmitting(false);

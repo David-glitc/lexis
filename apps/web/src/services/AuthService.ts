@@ -1,4 +1,5 @@
 import type { SupabaseClient, User } from "@supabase/supabase-js";
+import { getPublicSiteUrl } from "../utils/site-url";
 
 export class AuthService {
   private client: SupabaseClient;
@@ -8,9 +9,10 @@ export class AuthService {
   }
 
   async sendOtp(email: string): Promise<{ error: string | null }> {
+    const emailRedirectTo = `${getPublicSiteUrl()}/auth/callback`;
     const { error } = await this.client.auth.signInWithOtp({
       email,
-      options: { shouldCreateUser: true }
+      options: { shouldCreateUser: true, emailRedirectTo }
     });
     return { error: error?.message ?? null };
   }
@@ -24,10 +26,11 @@ export class AuthService {
     return { error: error?.message ?? null };
   }
 
-  async signInWithGoogle(redirectTo: string): Promise<{ error: string | null }> {
+  async signInWithGoogle(redirectTo?: string): Promise<{ error: string | null }> {
+    const resolvedRedirectTo = redirectTo ?? `${getPublicSiteUrl()}/auth/callback`;
     const { error } = await this.client.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo }
+      options: { redirectTo: resolvedRedirectTo }
     });
     return { error: error?.message ?? null };
   }

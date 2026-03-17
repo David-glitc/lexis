@@ -438,3 +438,17 @@
 - Solo mode creates a self-challenge (challenger === challenged), auto-accepts it, and navigates directly to `/play?challenge=<id>`
 - Time limit selection separated into its own section for clarity in both modes
 
+---
+
+## 2026-03-17 — About Page + Loading Stacks
+
+### About Page
+- Added `/about` page describing the origin story (love Wordle, reject paywalls) and linking to `x.com/davidpereishim`
+
+### Robust Loading Stacks
+- Added `LoadingStack` skeleton component and route-level `loading.tsx` for: `/about`, `/play`, `/profile`, `/challenges`, `/leaderboard`, `/friends`, `/settings`, `/hints`
+
+### Auth Redirect (Prod-safe)
+- Centralized public site URL resolution (prefers `NEXT_PUBLIC_SITE_URL` / `NEXT_PUBLIC_VERCEL_URL`)
+- Google OAuth `redirectTo` and email OTP `emailRedirectTo` now point to `<site>/auth/callback` to avoid falling back to localhost in production
+
