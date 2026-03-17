@@ -56,14 +56,18 @@ export class ProfileService {
   }
 
   async getProfile(userId: string): Promise<UserProfile | null> {
-    const { data, error } = await this.client
-      .from(this.tableName)
-      .select("*")
-      .eq("id", userId)
-      .single();
+    try {
+      const { data, error } = await this.client
+        .from(this.tableName)
+        .select("*")
+        .eq("id", userId)
+        .single();
 
-    if (error || !data) return null;
-    return data as UserProfile;
+      if (error || !data) return null;
+      return data as UserProfile;
+    } catch {
+      return null;
+    }
   }
 
   async getProfileByEmail(email: string): Promise<UserProfile | null> {
@@ -78,23 +82,27 @@ export class ProfileService {
   }
 
   async upsertProfile(profile: Partial<UserProfile> & { id: string }): Promise<UserProfile | null> {
-    const now = new Date().toISOString();
-    const payload = {
-      ...profile,
-      updated_at: now,
-      ranking_tier: profile.puzzles_won !== undefined
-        ? ProfileService.computeTier(profile.puzzles_won)
-        : profile.ranking_tier
-    };
+    try {
+      const now = new Date().toISOString();
+      const payload = {
+        ...profile,
+        updated_at: now,
+        ranking_tier: profile.puzzles_won !== undefined
+          ? ProfileService.computeTier(profile.puzzles_won)
+          : profile.ranking_tier
+      };
 
-    const { data, error } = await this.client
-      .from(this.tableName)
-      .upsert(payload, { onConflict: "id" })
-      .select()
-      .single();
+      const { data, error } = await this.client
+        .from(this.tableName)
+        .upsert(payload, { onConflict: "id" })
+        .select()
+        .single();
 
-    if (error || !data) return null;
-    return data as UserProfile;
+      if (error || !data) return null;
+      return data as UserProfile;
+    } catch {
+      return null;
+    }
   }
 
   async createProfile(userId: string, email: string, displayName: string): Promise<UserProfile | null> {
@@ -167,33 +175,41 @@ export class ProfileService {
   }
 
   async getLeaderboard(limit = 50): Promise<UserProfile[]> {
-    const { data, error } = await this.client
-      .from(this.tableName)
-      .select("*")
-      .order("puzzles_won", { ascending: false })
-      .limit(limit);
+    try {
+      const { data, error } = await this.client
+        .from(this.tableName)
+        .select("*")
+        .order("puzzles_won", { ascending: false })
+        .limit(limit);
 
-    if (error || !data) return [];
-    return data as UserProfile[];
+      if (error || !data) return [];
+      return data as UserProfile[];
+    } catch {
+      return [];
+    }
   }
 
   async setUsername(userId: string, username: string): Promise<{ error: string | null }> {
-    const normalized = username.toLowerCase();
-    if (!/^[a-z0-9_]{3,20}$/.test(normalized)) {
-      return { error: "Username must be 3-20 characters, alphanumeric and underscores only" };
+    try {
+      const normalized = username.toLowerCase();
+      if (!/^[a-z0-9_]{3,20}$/.test(normalized)) {
+        return { error: "Username must be 3-20 characters, alphanumeric and underscores only" };
+      }
+
+      const taken = !(await this.isUsernameAvailable(normalized));
+      if (taken) {
+        return { error: "Username is already taken" };
+      }
+
+      const { error } = await this.client
+        .from(this.tableName)
+        .update({ username: normalized, updated_at: new Date().toISOString() })
+        .eq("id", userId);
+
+      return { error: error?.message ?? null };
+    } catch {
+      return { error: "Could not update username" };
     }
-
-    const taken = !(await this.isUsernameAvailable(normalized));
-    if (taken) {
-      return { error: "Username is already taken" };
-    }
-
-    const { error } = await this.client
-      .from(this.tableName)
-      .update({ username: normalized, updated_at: new Date().toISOString() })
-      .eq("id", userId);
-
-    return { error: error?.message ?? null };
   }
 
   async getProfileByUsername(username: string): Promise<UserProfile | null> {
@@ -208,23 +224,31 @@ export class ProfileService {
   }
 
   async isUsernameAvailable(username: string): Promise<boolean> {
-    const { data } = await this.client
-      .from(this.tableName)
-      .select("id")
-      .eq("username", username.toLowerCase())
-      .limit(1);
+    try {
+      const { data } = await this.client
+        .from(this.tableName)
+        .select("id")
+        .eq("username", username.toLowerCase())
+        .limit(1);
 
-    return !data || data.length === 0;
+      return !data || data.length === 0;
+    } catch {
+      return false;
+    }
   }
 
   async searchProfiles(query: string, limit = 20): Promise<UserProfile[]> {
-    const { data, error } = await this.client
-      .from(this.tableName)
-      .select("*")
-      .or(`display_name.ilike.%${query}%,email.ilike.%${query}%,username.ilike.%${query}%`)
-      .limit(limit);
+    try {
+      const { data, error } = await this.client
+        .from(this.tableName)
+        .select("*")
+        .or(`display_name.ilike.%${query}%,email.ilike.%${query}%,username.ilike.%${query}%`)
+        .limit(limit);
 
-    if (error || !data) return [];
-    return data as UserProfile[];
+      if (error || !data) return [];
+      return data as UserProfile[];
+    } catch {
+      return [];
+    }
   }
 }

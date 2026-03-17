@@ -426,7 +426,6 @@ export default function HintsPage() {
           </Button>
         ) : null
       }
-      sidebar={false}
     >
       <div className="flex flex-1 flex-col items-center gap-3 pb-2 relative">
         {showToast && (

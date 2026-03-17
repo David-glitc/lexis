@@ -6,13 +6,14 @@ import { createClient } from "../../utils/supabase/client";
 import { useAuth } from "../../providers/AuthProvider";
 import { ProfileService, type UserProfile, type RankingTier } from "../../services/ProfileService";
 import { PointsService } from "../../services/PointsService";
-import { puzzleService, type PuzzleResult } from "../../services/PuzzleService";
+import { PuzzleService, type PuzzleResult } from "../../services/PuzzleService";
 import { AppShell } from "../../components/layout/app-shell";
 import { Button } from "../../components/ui/button";
 
 const supabase = createClient();
 const profileService = new ProfileService(supabase);
 const pointsService = new PointsService(supabase);
+const puzzleService = new PuzzleService(supabase);
 
 const TIER_COLORS: Record<RankingTier, string> = {
   unranked: "text-zinc-500 border-zinc-700",
@@ -114,9 +115,8 @@ export default function ProfilePage() {
   const [usernameError, setUsernameError] = useState("");
   const [loading, setLoading] = useState(true);
   const [lp, setLp] = useState(0);
-
-  const localStats = puzzleService.getStats();
-  const history = puzzleService.getHistory();
+  const [localStats, setLocalStats] = useState({ played: 0, won: 0, winRate: 0, streak: 0, maxStreak: 0, averageAttempts: 0 });
+  const [history, setHistory] = useState<PuzzleResult[]>([]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -126,10 +126,17 @@ export default function ProfilePage() {
     }
 
     async function load() {
-      let p = await profileService.getProfile(user!.id);
-      if (!p) {
-        p = await profileService.createProfile(user!.id, user!.email ?? "", user!.email?.split("@")[0] ?? "Player");
-      }
+      const [p_result, stats, hist] = await Promise.all([
+        profileService.getProfile(user!.id).then(async (p) => {
+          if (p) return p;
+          return profileService.createProfile(user!.id, user!.email ?? "", user!.email?.split("@")[0] ?? "Player");
+        }),
+        puzzleService.getStats(user!.id).catch(() => ({ played: 0, won: 0, winRate: 0, streak: 0, maxStreak: 0, averageAttempts: 0 })),
+        puzzleService.getHistory(user!.id).catch(() => [] as PuzzleResult[]),
+      ]);
+      const p = p_result;
+      setLocalStats(stats);
+      setHistory(hist);
       if (p) {
         setProfile(p);
         setDisplayName(p.display_name);

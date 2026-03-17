@@ -13,31 +13,14 @@ import {
 } from "../../features/puzzle/mock-api";
 import { Button } from "../../components/ui/button";
 import { LexisLogo } from "../../components/ui/lexis-logo";
-import { puzzleService } from "../../services/PuzzleService";
+import { PuzzleService } from "../../services/PuzzleService";
 import { useAuth } from "../../providers/AuthProvider";
 import { createClient } from "../../utils/supabase/client";
 import { PointsService } from "../../services/PointsService";
 import { DailyChallengeService, type DailyChallenge } from "../../services/DailyChallengeService";
 
-function isDailyCompleted(dateKey?: string): boolean {
-  const key = dateKey ?? formatDateKey(new Date());
-  return getDailyHistory().some((h) => h.date === key);
-}
-
-function getDailySavedState(puzzleId: string): { rows: MockPuzzle["rows"]; attempts: number; status: MockPuzzle["status"]; guesses: string[] } | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(`lexis_daily_state_${puzzleId}`);
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
-}
-
-function saveDailyState(puzzleId: string, rows: MockPuzzle["rows"], attempts: number, status: MockPuzzle["status"], guesses: string[]) {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(`lexis_daily_state_${puzzleId}`, JSON.stringify({ rows, attempts, status, guesses }));
-  } catch { /* quota */ }
-}
+const supabase = createClient();
+const puzzleService = new PuzzleService(supabase);
 
 function deriveKeyboardState(puzzle: MockPuzzle): KeyboardState {
   const state: KeyboardState = {};
@@ -110,41 +93,14 @@ interface DailyHistoryEntry {
   solved: boolean;
 }
 
-function getDailyHistory(): DailyHistoryEntry[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem("lexis_daily_history");
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function addDailyHistory(date: string, solved: boolean) {
-  if (typeof window === "undefined") return;
-  try {
-    const history = getDailyHistory();
-    const idx = history.findIndex((h) => h.date === date);
-    if (idx >= 0) {
-      history[idx].solved = history[idx].solved || solved;
-    } else {
-      history.push({ date, solved });
-    }
-    localStorage.setItem("lexis_daily_history", JSON.stringify(history));
-  } catch {
-    // storage unavailable
-  }
-}
-
 const CALENDAR_EPOCH = new Date("2026-01-01");
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December"
 ];
 
-function DailyCalendar({ onSelectDate }: { onSelectDate: (date: Date) => void }) {
+function DailyCalendar({ onSelectDate, history }: { onSelectDate: (date: Date) => void; history: DailyHistoryEntry[] }) {
   const [viewDate, setViewDate] = useState(() => new Date());
-  const history = useMemo(getDailyHistory, []);
 
   const today = useMemo(() => {
     const t = new Date();
@@ -304,9 +260,16 @@ function StatsModal({ onClose, onShare, puzzle, mode, dailyNumber, hardMode }: {
   dailyNumber: number;
   hardMode: boolean;
 }) {
-  const stats = puzzleService.getStats();
-  const history = puzzleService.getHistory().map((r) => ({ attempts: r.attempts, won: r.won }));
+  const [stats, setStats] = useState({ played: 0, won: 0, winRate: 0, streak: 0, maxStreak: 0, averageAttempts: 0 });
+  const [history, setHistory] = useState<{ attempts: number; won: boolean }[]>([]);
   const [countdown, setCountdown] = useState(getCountdownToMidnight());
+  const { user: statsUser } = useAuth();
+
+  useEffect(() => {
+    if (!statsUser) return;
+    puzzleService.getStats(statsUser.id).then(setStats).catch(() => {});
+    puzzleService.getHistory(statsUser.id).then((h) => setHistory(h.map((r) => ({ attempts: r.attempts, won: r.won })))).catch(() => {});
+  }, [statsUser]);
 
   useEffect(() => {
     const interval = setInterval(() => setCountdown(getCountdownToMidnight()), 1000);
@@ -443,18 +406,22 @@ function SettingsModal({ onClose, hardMode, onToggleHardMode }: {
   );
 }
 
-function loadDailyWithState(): MockPuzzle {
-  const p = createDailyPuzzle();
-  const saved = getDailySavedState(p.id);
-  if (saved) {
-    return { ...p, rows: saved.rows, attempts: saved.attempts, status: saved.status };
-  }
-  return p;
+function rebuildRows(guesses: string[], solution: string): MockPuzzle["rows"] {
+  return guesses.map((guess, i) => ({
+    id: `guess-${i + 1}`,
+    letters: guess.split("").map((letter, j) => {
+      const target = solution.split("");
+      let state: "correct" | "present" | "absent" = "absent";
+      if (target[j] === letter) state = "correct";
+      else if (target.includes(letter)) state = "present";
+      return { letter, state };
+    }),
+  }));
 }
 
 export default function PlayPage() {
   const [mode, setMode] = useState<GameMode>("daily");
-  const [puzzle, setPuzzle] = useState<MockPuzzle>(() => loadDailyWithState());
+  const [puzzle, setPuzzle] = useState<MockPuzzle>(() => createDailyPuzzle());
   const [currentGuess, setCurrentGuess] = useState("");
   const [showToast, setShowToast] = useState<string | null>(null);
   const [showStats, setShowStats] = useState(false);
@@ -465,7 +432,7 @@ export default function PlayPage() {
   const [bounceRow, setBounceRow] = useState<number | undefined>();
   const [poppingCol, setPoppingCol] = useState<number | undefined>();
   const [hardMode, setHardMode] = useState(false);
-  const toastTimeout = useRef<ReturnType<typeof setTimeout>>();
+  const toastTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
   const puzzleStarted = useRef(false);
   const { user } = useAuth();
   const [speedChallenge, setSpeedChallenge] = useState<DailyChallenge | null>(null);
@@ -474,10 +441,27 @@ export default function PlayPage() {
   const speedStartTime = useRef<number>(0);
   const speedTimedOut = useRef(false);
   const [showCalendar, setShowCalendar] = useState(false);
-  const [hideTimer, setHideTimer] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return localStorage.getItem("lexis_hide_timer") === "true";
-  });
+  const [hideTimer, setHideTimer] = useState(false);
+  const [dailyHistory, setDailyHistory] = useState<DailyHistoryEntry[]>([]);
+  const dailyStateLoaded = useRef(false);
+
+  useEffect(() => {
+    if (!user) return;
+    if (dailyStateLoaded.current) return;
+    dailyStateLoaded.current = true;
+    const dateKey = formatDateKey(new Date());
+    Promise.all([
+      puzzleService.getDailyState(user.id, dateKey),
+      puzzleService.getDailyHistory(user.id),
+    ]).then(([saved, history]) => {
+      setDailyHistory(history);
+      if (saved && saved.guesses.length > 0) {
+        const base = createDailyPuzzle();
+        const rows = rebuildRows(saved.guesses, base.solution);
+        setPuzzle({ ...base, rows, attempts: saved.attempts, status: saved.status as MockPuzzle["status"] });
+      }
+    }).catch(() => {});
+  }, [user]);
 
   useEffect(() => {
     if (!puzzleStarted.current) {
@@ -521,9 +505,10 @@ export default function PlayPage() {
     if (puzzle.status !== "lost") return;
     speedTimedOut.current = false;
     toast("Time's up! " + puzzle.solution.toUpperCase(), 4000);
-    puzzleService.finishPuzzle(false);
+    if (user) {
+      puzzleService.finishPuzzle(user.id, false, "speed").catch(() => {});
+    }
     if (speedChallenge && user) {
-      const supabase = createClient();
       const challengeService = new DailyChallengeService(supabase);
       challengeService.submitResult(user.id, speedChallenge.id, puzzle.attempts, Date.now() - speedStartTime.current, false).catch(() => {});
     }
@@ -584,9 +569,13 @@ export default function PlayPage() {
           ? puzzle.id.replace("daily-", "")
           : null;
 
-        if (mode === "daily" && dailyDateStr) {
-          const allGuesses = [...puzzleService.getHistory().filter(r => r.puzzleId === puzzle.id).flatMap(r => r.guesses), currentGuess];
-          saveDailyState(`daily-${dailyDateStr}`, next.rows, next.attempts, next.status, allGuesses);
+        if (user && mode === "daily" && dailyDateStr) {
+          puzzleService.saveDailyState(
+            user.id, puzzle.id, dailyDateStr,
+            [...puzzleService["guesses"], currentGuess],
+            next.attempts, next.status as "playing" | "won" | "lost",
+            puzzle.solution, "daily"
+          ).catch(() => {});
         }
 
         setTimeout(() => {
@@ -595,18 +584,12 @@ export default function PlayPage() {
             setBounceRow(rowIdx);
             const messages = ["Genius", "Magnificent", "Impressive", "Splendid", "Great", "Phew"];
             toast(messages[Math.min(next.attempts - 1, 5)], 2000);
-            puzzleService.finishPuzzle(true);
             setSpeedTimerActive(false);
 
-            if (mode === "daily" && dailyDateStr) {
-              addDailyHistory(dailyDateStr, true);
-              saveDailyState(`daily-${dailyDateStr}`, next.rows, next.attempts, next.status, []);
-            }
-
             if (user) {
-              const supabase = createClient();
-              const points = PointsService.getPointsForGuesses(next.attempts);
+              puzzleService.finishPuzzle(user.id, true, mode).catch(() => {});
               const pointsService = new PointsService(supabase);
+              const points = PointsService.getPointsForGuesses(next.attempts);
               pointsService.awardPoints(user.id, points, "puzzle_win", { mode, attempts: next.attempts }).catch(() => {});
 
               if (mode === "speed" && speedChallenge) {
@@ -621,18 +604,15 @@ export default function PlayPage() {
             }, 2000);
           } else if (next.status === "lost") {
             toast(next.solution.toUpperCase(), 4000);
-            puzzleService.finishPuzzle(false);
             setSpeedTimerActive(false);
 
-            if (mode === "daily" && dailyDateStr) {
-              addDailyHistory(dailyDateStr, false);
-              saveDailyState(`daily-${dailyDateStr}`, next.rows, next.attempts, next.status, []);
-            }
+            if (user) {
+              puzzleService.finishPuzzle(user.id, false, mode).catch(() => {});
 
-            if (mode === "speed" && speedChallenge && user) {
-              const supabase = createClient();
-              const challengeService = new DailyChallengeService(supabase);
-              challengeService.submitResult(user.id, speedChallenge.id, next.attempts, Date.now() - speedStartTime.current, false).catch(() => {});
+              if (mode === "speed" && speedChallenge) {
+                const challengeService = new DailyChallengeService(supabase);
+                challengeService.submitResult(user.id, speedChallenge.id, next.attempts, Date.now() - speedStartTime.current, false).catch(() => {});
+              }
             }
 
             setTimeout(() => setShowStats(true), 3000);
@@ -749,13 +729,25 @@ export default function PlayPage() {
     }
 
     if (newMode === "daily") {
-      const p = loadDailyWithState();
+      const p = createDailyPuzzle();
       setMode("daily");
-      setPuzzle(p);
       setCurrentGuess("");
       setRevealingRow(undefined);
       setBounceRow(undefined);
       puzzleStarted.current = false;
+      if (user) {
+        const dateKey = formatDateKey(new Date());
+        puzzleService.getDailyState(user.id, dateKey).then((saved) => {
+          if (saved && saved.guesses.length > 0) {
+            const rows = rebuildRows(saved.guesses, p.solution);
+            setPuzzle({ ...p, rows, attempts: saved.attempts, status: saved.status as MockPuzzle["status"] });
+          } else {
+            setPuzzle(p);
+          }
+        }).catch(() => setPuzzle(p));
+      } else {
+        setPuzzle(p);
+      }
       return;
     }
 
@@ -795,17 +787,20 @@ export default function PlayPage() {
     setSpeedChallenge(null);
     const p = createDailyPuzzleForDate(date);
     const dateKey = formatDateKey(date);
-    const saved = getDailySavedState(`daily-${dateKey}`) ?? getDailySavedState(p.id);
-    if (saved) {
-      setPuzzle({ ...p, rows: saved.rows, attempts: saved.attempts, status: saved.status });
+    puzzleStarted.current = false;
+    if (user) {
+      puzzleService.getDailyState(user.id, dateKey).then((saved) => {
+        if (saved && saved.guesses.length > 0) {
+          const rows = rebuildRows(saved.guesses, p.solution);
+          setPuzzle({ ...p, rows, attempts: saved.attempts, status: saved.status as MockPuzzle["status"] });
+        } else {
+          setPuzzle(p);
+        }
+      }).catch(() => setPuzzle(p));
     } else {
       setPuzzle(p);
     }
-    setMode("daily");
-    setCurrentGuess("");
-    setRevealingRow(undefined);
     setBounceRow(undefined);
-    puzzleStarted.current = false;
     setShowCalendar(false);
   }
 
@@ -815,6 +810,8 @@ export default function PlayPage() {
       navigator.clipboard.writeText(text).then(() => toast("Copied to clipboard!", 2000));
     }
   }
+
+  const userInitial = user?.email?.[0]?.toUpperCase();
 
   return (
     <div className="h-[100dvh] flex flex-col bg-[#060606] relative noise">
@@ -850,6 +847,22 @@ export default function PlayPage() {
           >
             <SettingsIcon />
           </button>
+          <Link
+            href={user ? "/profile" : "/login"}
+            className="p-1.5 text-zinc-400 hover:text-white transition-colors"
+            aria-label="Profile"
+          >
+            {userInitial ? (
+              <span className="flex h-[22px] w-[22px] items-center justify-center rounded-full bg-white/10 text-[11px] font-bold leading-none text-white">
+                {userInitial}
+              </span>
+            ) : (
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="8" r="5" />
+                <path d="M20 21a8 8 0 0 0-16 0" />
+              </svg>
+            )}
+          </Link>
         </div>
       </header>
 
@@ -895,7 +908,7 @@ export default function PlayPage() {
 
       {showCalendar && mode === "daily" && (
         <div className="px-4 py-2 shrink-0">
-          <DailyCalendar onSelectDate={handleCalendarSelect} />
+          <DailyCalendar onSelectDate={handleCalendarSelect} history={dailyHistory} />
         </div>
       )}
 
@@ -906,7 +919,7 @@ export default function PlayPage() {
               <div className="flex items-center justify-center gap-2">
                 <span className="text-zinc-600 text-xs font-mono">Timer hidden</span>
                 <button
-                  onClick={() => { setHideTimer(false); localStorage.setItem("lexis_hide_timer", "false"); }}
+                  onClick={() => setHideTimer(false)}
                   className="text-zinc-600 hover:text-white p-0.5 transition-colors"
                   aria-label="Show timer"
                 >
@@ -940,7 +953,7 @@ export default function PlayPage() {
                   {speedTimeRemaining.display}
                 </span>
                 <button
-                  onClick={() => { setHideTimer(true); localStorage.setItem("lexis_hide_timer", "true"); }}
+                  onClick={() => setHideTimer(true)}
                   className="text-zinc-500 hover:text-white p-0.5 transition-colors"
                   aria-label="Hide timer"
                 >
@@ -968,7 +981,7 @@ export default function PlayPage() {
       </div>
 
       {/* Keyboard */}
-      <div className="shrink-0 px-2 pb-2 pt-1">
+      <div className="shrink-0 px-2 pb-2 pt-1 mb-[56px] md:mb-0">
         {puzzle.status !== "playing" ? (
           <div className="flex gap-2 max-w-[500px] mx-auto mb-2">
             <Button fullWidth size="lg" variant="secondary" onClick={() => startNewPuzzle("daily")}>
@@ -984,6 +997,37 @@ export default function PlayPage() {
         ) : null}
         <Keyboard state={keyboardState} onKey={handleKey} />
       </div>
+
+      {/* Global bottom navigation */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 flex items-center border-t border-white/[0.06] bg-[#060606]/95 backdrop-blur-xl pb-[env(safe-area-inset-bottom)] md:hidden">
+        {[
+          { href: "/play", label: "Play", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polygon points="10 8 16 12 10 16 10 8" /></svg> },
+          { href: "/hints", label: "Training", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18h6" /><path d="M10 22h4" /><path d="M12 2a7 7 0 0 1 4 12.7V17H8v-2.3A7 7 0 0 1 12 2z" /></svg> },
+          { href: "/challenges", label: "Challenges", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 17.5L3 6V3h3l11.5 11.5" /><path d="M13 7l4-4 4 4-4 4" /><path d="M7 13l-4 4 4 4 4-4" /></svg> },
+          { href: "/leaderboard", label: "Leaderboard", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" /><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" /><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" /><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" /></svg> },
+          { href: "/profile", label: "Profile", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="5" /><path d="M20 21a8 8 0 0 0-16 0" /></svg> },
+        ].map((item) => {
+          const isActive = item.href === "/play";
+          const isProfile = item.href === "/profile";
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`relative flex flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2 text-[10px] transition-colors ${
+                isActive ? "text-white" : "text-zinc-500"
+              }`}
+            >
+              {isActive && <span className="absolute top-0 h-1.5 w-1.5 rounded-full bg-[#538d4e]" />}
+              {isProfile && userInitial ? (
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/10 text-[11px] font-semibold leading-none">
+                  {userInitial}
+                </span>
+              ) : item.icon}
+              <span>{item.label}</span>
+            </Link>
+          );
+        })}
+      </nav>
 
       {/* Modals */}
       {showStats && (

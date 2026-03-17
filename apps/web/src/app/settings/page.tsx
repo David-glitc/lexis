@@ -9,9 +9,12 @@ import { ProfileService, type UserProfile } from "../../services/ProfileService"
 import { MusicToggle } from "../../components/global/MusicPlayer";
 import { useToast } from "../../components/global/GlobalToast";
 import { AvatarPicker, UserAvatar } from "../../components/ui/avatars";
+import { PreferencesService, type UserPreferences } from "../../services/PreferencesService";
+import { NotificationService } from "../../services/NotificationService";
 
 const supabase = createClient();
 const profileService = new ProfileService(supabase);
+const prefsService = new PreferencesService(supabase);
 
 function Toggle({ enabled, onChange, disabled }: { enabled: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (
@@ -58,6 +61,7 @@ export default function SettingsPage() {
   const { toast } = useToast();
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
   const [bio, setBio] = useState("");
@@ -65,16 +69,21 @@ export default function SettingsPage() {
   const [checkingUsername, setCheckingUsername] = useState(false);
   const [saving, setSaving] = useState(false);
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null);
+  const [dirty, setDirty] = useState(false);
 
-  const [hardMode, setHardMode] = useState(false);
-  const [highContrast, setHighContrast] = useState(false);
-  const [vibration, setVibration] = useState(false);
-  const [notifyChallenges, setNotifyChallenges] = useState(false);
-  const [notifyDaily, setNotifyDaily] = useState(false);
+  const [prefs, setPrefs] = useState<UserPreferences>({
+    hard_mode: false, high_contrast: false, vibration: false,
+    notify_challenges: false, notify_daily: false, hide_timer: false, music_enabled: false,
+  });
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission>("default");
 
   useEffect(() => {
-    if (!user) return;
-    profileService.getProfile(user.id).then((p) => {
+    if (!user) { setProfileLoading(false); return; }
+    setProfileLoading(true);
+    Promise.all([
+      profileService.getProfile(user.id),
+      prefsService.get(user.id),
+    ]).then(([p, userPrefs]) => {
       if (p) {
         setProfile(p);
         setDisplayName(p.display_name || "");
@@ -82,16 +91,14 @@ export default function SettingsPage() {
         setBio(p.bio || "");
         setSelectedAvatar(p.avatar_url || null);
       }
-    });
+      setPrefs(userPrefs);
+      setDirty(false);
+      setProfileLoading(false);
+    }).catch(() => setProfileLoading(false));
+    if (NotificationService.isSupported()) {
+      setNotifPermission(NotificationService.getPermission());
+    }
   }, [user]);
-
-  useEffect(() => {
-    setHardMode(localStorage.getItem("lexis_hard_mode") === "1");
-    setHighContrast(localStorage.getItem("lexis_high_contrast") === "1");
-    setVibration(localStorage.getItem("lexis_vibration") === "1");
-    setNotifyChallenges(localStorage.getItem("lexis_notify_challenges") === "1");
-    setNotifyDaily(localStorage.getItem("lexis_notify_daily") === "1");
-  }, []);
 
   useEffect(() => {
     if (!username || username === profile?.username) {
@@ -112,9 +119,22 @@ export default function SettingsPage() {
     return () => clearTimeout(timer);
   }, [username, profile?.username]);
 
-  function togglePref(key: string, value: boolean, setter: (v: boolean) => void) {
-    setter(value);
-    localStorage.setItem(key, value ? "1" : "0");
+  function togglePref(key: keyof UserPreferences, value: boolean) {
+    if (!user) return;
+    setPrefs((prev) => ({ ...prev, [key]: value }));
+    prefsService.set(user.id, { [key]: value }).catch(() => {});
+  }
+
+  async function handleEnableNotifications() {
+    if (!user) return;
+    const notifService = new NotificationService(supabase);
+    const success = await notifService.subscribeToPush(user.id);
+    if (success) {
+      setNotifPermission("granted");
+      toast("Notifications enabled", { type: "success" });
+    } else {
+      toast("Could not enable notifications", { type: "error" });
+    }
   }
 
   async function handleSaveProfile() {
@@ -136,7 +156,14 @@ export default function SettingsPage() {
         }
       }
       const updated = await profileService.getProfile(user.id);
-      if (updated) setProfile(updated);
+      if (updated) {
+        setProfile(updated);
+        setDisplayName(updated.display_name || "");
+        setUsername(updated.username || "");
+        setBio(updated.bio || "");
+        setSelectedAvatar(updated.avatar_url || null);
+      }
+      setDirty(false);
       toast("Profile saved", { type: "success" });
     } catch {
       toast("Failed to save profile", { type: "error" });
@@ -177,77 +204,115 @@ export default function SettingsPage() {
       <div className="space-y-5 pb-10">
         {/* Profile */}
         <SectionCard title="Profile">
-          <div className="space-y-4">
-            <div className="flex flex-col items-center mb-2">
-              <UserAvatar avatarId={selectedAvatar} displayName={displayName || user.email} size={64} className="mb-3" />
-              <p className="text-xs text-zinc-500 font-body mb-3">Choose your avatar</p>
-              <AvatarPicker selected={selectedAvatar} onSelect={setSelectedAvatar} />
+          {profileLoading ? (
+            <div className="space-y-4 animate-pulse">
+              <div className="flex flex-col items-center mb-2">
+                <div className="w-16 h-16 rounded-full bg-white/[0.06] mb-3" />
+                <div className="h-3 w-24 bg-white/[0.06] rounded" />
+              </div>
+              <div className="h-12 rounded-xl bg-white/[0.06]" />
+              <div className="h-12 rounded-xl bg-white/[0.06]" />
+              <div className="h-24 rounded-xl bg-white/[0.06]" />
             </div>
-            <div>
-              <label className="block text-xs font-body text-zinc-400 mb-1.5">Display Name</label>
-              <input
-                type="text"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none focus:border-[#6abf5e] transition-colors font-body placeholder:text-zinc-600"
-                placeholder="Your display name"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-body text-zinc-400 mb-1.5">Username</label>
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 font-mono text-sm">@</span>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex flex-col items-center mb-2">
+                <UserAvatar avatarId={selectedAvatar} displayName={displayName || user.email} size={64} className="mb-3" />
+                <p className="text-xs text-zinc-500 font-body mb-3">Choose your avatar</p>
+                <AvatarPicker selected={selectedAvatar} onSelect={(id) => { setSelectedAvatar(id); setDirty(true); }} />
+              </div>
+              <div>
+                <label className="block text-xs font-body text-zinc-400 mb-1.5">Display Name</label>
                 <input
                   type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
-                  maxLength={20}
-                  className="w-full rounded-xl border border-white/10 bg-white/[0.04] pl-8 pr-10 py-3 text-sm text-white outline-none focus:border-[#6abf5e] transition-colors font-mono placeholder:text-zinc-600"
-                  placeholder="username"
+                  value={displayName}
+                  onChange={(e) => { setDisplayName(e.target.value); setDirty(true); }}
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none focus:border-[#6abf5e] transition-colors font-body placeholder:text-zinc-600"
+                  placeholder="Your display name"
                 />
-                {username && username !== profile?.username && (
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2">
-                    {checkingUsername ? (
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
-                    ) : usernameAvailable === true ? (
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                    ) : usernameAvailable === false ? (
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-                    ) : null}
-                  </span>
+                {profile?.display_name && displayName !== profile.display_name && (
+                  <p className="text-[11px] text-zinc-600 font-mono mt-1">was: {profile.display_name}</p>
                 )}
               </div>
-              {username && !/^[a-z0-9_]{3,20}$/.test(username) && (
-                <p className="text-xs text-red-400 font-body mt-1">3-20 characters, a-z, 0-9, underscores only</p>
-              )}
+              <div>
+                <label className="block text-xs font-body text-zinc-400 mb-1.5">Username</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 font-mono text-sm">@</span>
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={(e) => { setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "")); setDirty(true); }}
+                    maxLength={20}
+                    className="w-full rounded-xl border border-white/10 bg-white/[0.04] pl-8 pr-10 py-3 text-sm text-white outline-none focus:border-[#6abf5e] transition-colors font-mono placeholder:text-zinc-600"
+                    placeholder="username"
+                  />
+                  {username && username !== profile?.username && (
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2">
+                      {checkingUsername ? (
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
+                      ) : usernameAvailable === true ? (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                      ) : usernameAvailable === false ? (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                      ) : null}
+                    </span>
+                  )}
+                </div>
+                {username && !/^[a-z0-9_]{3,20}$/.test(username) && (
+                  <p className="text-xs text-red-400 font-body mt-1">3-20 characters, a-z, 0-9, underscores only</p>
+                )}
+                {profile?.username && username !== profile.username && (
+                  <p className="text-[11px] text-zinc-600 font-mono mt-1">was: @{profile.username}</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-body text-zinc-400 mb-1.5">Bio</label>
+                <textarea
+                  value={bio}
+                  onChange={(e) => { setBio(e.target.value.slice(0, 160)); setDirty(true); }}
+                  rows={3}
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none focus:border-[#6abf5e] transition-colors font-body placeholder:text-zinc-600 resize-none"
+                  placeholder="Tell the arena about yourself..."
+                />
+                <p className="text-xs text-zinc-600 font-mono text-right">{bio.length}/160</p>
+              </div>
+              <button
+                onClick={handleSaveProfile}
+                disabled={saving || !dirty}
+                className={`w-full py-3 font-bold rounded-full text-sm transition-all font-body ${
+                  dirty
+                    ? "bg-white text-black hover:scale-[1.02] active:scale-95"
+                    : "bg-white/[0.06] text-zinc-500 cursor-default"
+                } disabled:opacity-50`}
+              >
+                {saving ? "Saving..." : dirty ? "Save Changes" : "No Changes"}
+              </button>
             </div>
-            <div>
-              <label className="block text-xs font-body text-zinc-400 mb-1.5">Bio</label>
-              <textarea
-                value={bio}
-                onChange={(e) => setBio(e.target.value.slice(0, 160))}
-                rows={3}
-                className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none focus:border-[#6abf5e] transition-colors font-body placeholder:text-zinc-600 resize-none"
-                placeholder="Tell the arena about yourself..."
-              />
-              <p className="text-xs text-zinc-600 font-mono text-right">{bio.length}/160</p>
-            </div>
-            <button
-              onClick={handleSaveProfile}
-              disabled={saving}
-              className="w-full py-3 bg-white text-black font-bold rounded-full text-sm hover:scale-[1.02] active:scale-95 transition-transform disabled:opacity-50 font-body"
-            >
-              {saving ? "Saving..." : "Save Profile"}
-            </button>
-          </div>
+          )}
         </SectionCard>
 
         {/* Account */}
         <SectionCard title="Account">
           <div className="space-y-4">
+            {profile && (
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                <UserAvatar avatarId={profile.avatar_url} displayName={profile.display_name || user.email} size={40} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-body text-white font-semibold truncate">
+                    {profile.display_name || "No name set"}
+                  </p>
+                  {profile.username && (
+                    <p className="text-xs font-mono text-zinc-500">@{profile.username}</p>
+                  )}
+                </div>
+                <span className="rounded-full bg-white/[0.06] border border-white/[0.08] px-2.5 py-1 text-[10px] font-mono text-zinc-400 uppercase">
+                  {profile.ranking_tier}
+                </span>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <span className="text-sm font-body text-zinc-400">Email</span>
-              <span className="text-sm font-mono text-white">{user.email || "Web3 Wallet"}</span>
+              <span className="text-sm font-mono text-white truncate ml-4">{user.email || "Web3 Wallet"}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm font-body text-zinc-400">Auth Method</span>
@@ -255,6 +320,14 @@ export default function SettingsPage() {
                 {authMethod}
               </span>
             </div>
+            {profile?.created_at && (
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-body text-zinc-400">Member Since</span>
+                <span className="text-sm font-mono text-zinc-300">
+                  {new Date(profile.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
+                </span>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <span className="text-sm font-body text-zinc-400">Stats & Profile</span>
               <Link href="/profile" className="text-sm font-body text-[#6abf5e] hover:underline">
@@ -278,7 +351,7 @@ export default function SettingsPage() {
                 <p className="text-sm font-body text-white">Hard Mode</p>
                 <p className="text-xs font-body text-zinc-500">Revealed hints must be used in subsequent guesses</p>
               </div>
-              <Toggle enabled={hardMode} onChange={(v) => togglePref("lexis_hard_mode", v, setHardMode)} />
+              <Toggle enabled={prefs.hard_mode} onChange={(v) => togglePref("hard_mode", v)} />
             </div>
             <div className="flex items-center justify-between">
               <div>
@@ -292,14 +365,14 @@ export default function SettingsPage() {
                 <p className="text-sm font-body text-white">High Contrast</p>
                 <p className="text-xs font-body text-zinc-500">Improved color accessibility</p>
               </div>
-              <Toggle enabled={highContrast} onChange={(v) => togglePref("lexis_high_contrast", v, setHighContrast)} />
+              <Toggle enabled={prefs.high_contrast} onChange={(v) => togglePref("high_contrast", v)} />
             </div>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-body text-white">Keyboard Vibration</p>
                 <p className="text-xs font-body text-zinc-500">Haptic feedback on key press</p>
               </div>
-              <Toggle enabled={vibration} onChange={(v) => togglePref("lexis_vibration", v, setVibration)} />
+              <Toggle enabled={prefs.vibration} onChange={(v) => togglePref("vibration", v)} />
             </div>
           </div>
         </SectionCard>
@@ -307,25 +380,33 @@ export default function SettingsPage() {
         {/* Notifications */}
         <SectionCard title="Notifications">
           <div className="space-y-4">
-            <div className="flex items-center justify-between opacity-50">
-              <div className="flex items-center gap-2">
-                <div>
-                  <p className="text-sm font-body text-white">Challenge Notifications</p>
-                  <p className="text-xs font-body text-zinc-500">When someone challenges you</p>
-                </div>
-                <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] font-mono text-zinc-500 uppercase">Coming soon</span>
+            {notifPermission !== "granted" && NotificationService.isSupported() && (
+              <button
+                onClick={handleEnableNotifications}
+                className="w-full py-3 bg-[#538d4e] text-white font-bold rounded-full text-sm hover:brightness-110 transition-all font-body"
+              >
+                Enable Push Notifications
+              </button>
+            )}
+            {notifPermission === "granted" && (
+              <p className="text-xs text-[#538d4e] font-mono flex items-center gap-1.5">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                Notifications enabled
+              </p>
+            )}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-body text-white">Challenge Notifications</p>
+                <p className="text-xs font-body text-zinc-500">When someone challenges you</p>
               </div>
-              <Toggle enabled={notifyChallenges} onChange={(v) => togglePref("lexis_notify_challenges", v, setNotifyChallenges)} />
+              <Toggle enabled={prefs.notify_challenges} onChange={(v) => togglePref("notify_challenges", v)} />
             </div>
-            <div className="flex items-center justify-between opacity-50">
-              <div className="flex items-center gap-2">
-                <div>
-                  <p className="text-sm font-body text-white">Daily Reminder</p>
-                  <p className="text-xs font-body text-zinc-500">Remind me to play the daily puzzle</p>
-                </div>
-                <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] font-mono text-zinc-500 uppercase">Coming soon</span>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-body text-white">Daily Reminder</p>
+                <p className="text-xs font-body text-zinc-500">Remind me to play the daily puzzle</p>
               </div>
-              <Toggle enabled={notifyDaily} onChange={(v) => togglePref("lexis_notify_daily", v, setNotifyDaily)} />
+              <Toggle enabled={prefs.notify_daily} onChange={(v) => togglePref("notify_daily", v)} />
             </div>
           </div>
         </SectionCard>

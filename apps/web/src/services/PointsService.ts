@@ -42,51 +42,63 @@ export class PointsService {
     reason: string,
     metadata: Record<string, any> = {}
   ): Promise<{ error: string | null }> {
-    const { error: ledgerError } = await this.client.from("points_ledger").insert({
-      user_id: userId,
-      amount,
-      reason,
-      metadata,
-      created_at: new Date().toISOString(),
-    });
+    try {
+      const { error: ledgerError } = await this.client.from("points_ledger").insert({
+        user_id: userId,
+        amount,
+        reason,
+        metadata,
+        created_at: new Date().toISOString(),
+      });
 
-    if (ledgerError) return { error: ledgerError.message };
+      if (ledgerError) return { error: ledgerError.message };
 
-    const { data: profile } = await this.client
-      .from("profiles")
-      .select("total_points")
-      .eq("id", userId)
-      .single();
+      const { data: profile } = await this.client
+        .from("profiles")
+        .select("total_points")
+        .eq("id", userId)
+        .single();
 
-    const currentPoints = (profile?.total_points as number) ?? 0;
+      const currentPoints = (profile?.total_points as number) ?? 0;
 
-    const { error: updateError } = await this.client
-      .from("profiles")
-      .update({ total_points: currentPoints + amount })
-      .eq("id", userId);
+      const { error: updateError } = await this.client
+        .from("profiles")
+        .update({ total_points: currentPoints + amount })
+        .eq("id", userId);
 
-    return { error: updateError?.message ?? null };
+      return { error: updateError?.message ?? null };
+    } catch {
+      return { error: "DB unavailable" };
+    }
   }
 
   async getPoints(userId: string): Promise<number> {
-    const { data } = await this.client
-      .from("profiles")
-      .select("total_points")
-      .eq("id", userId)
-      .single();
+    try {
+      const { data } = await this.client
+        .from("profiles")
+        .select("total_points")
+        .eq("id", userId)
+        .single();
 
-    return (data?.total_points as number) ?? 0;
+      return (data?.total_points as number) ?? 0;
+    } catch {
+      return 0;
+    }
   }
 
   async getPointsHistory(userId: string, limit = 50): Promise<PointsLedgerEntry[]> {
-    const { data } = await this.client
-      .from("points_ledger")
-      .select("*")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(limit);
+    try {
+      const { data } = await this.client
+        .from("points_ledger")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(limit);
 
-    return (data ?? []) as PointsLedgerEntry[];
+      return (data ?? []) as PointsLedgerEntry[];
+    } catch {
+      return [];
+    }
   }
 
   async getGlobalLeaderboard(
@@ -102,20 +114,24 @@ export class PointsService {
       avatar_url: string | null;
     }>
   > {
-    const { data } = await this.client
-      .from("profiles")
-      .select("id, username, display_name, total_points, ranking_tier, avatar_url")
-      .order("total_points", { ascending: false })
-      .range(offset, offset + limit - 1);
+    try {
+      const { data } = await this.client
+        .from("profiles")
+        .select("id, username, display_name, total_points, ranking_tier, avatar_url")
+        .order("total_points", { ascending: false })
+        .range(offset, offset + limit - 1);
 
-    return (data ?? []) as Array<{
-      id: string;
-      username: string;
-      display_name: string;
-      total_points: number;
-      ranking_tier: string;
-      avatar_url: string | null;
-    }>;
+      return (data ?? []) as Array<{
+        id: string;
+        username: string;
+        display_name: string;
+        total_points: number;
+        ranking_tier: string;
+        avatar_url: string | null;
+      }>;
+    } catch {
+      return [];
+    }
   }
 
   async getFriendsLeaderboard(
@@ -140,41 +156,49 @@ export class PointsService {
       avatar_url: string | null;
     };
 
-    const { data: sentFriends } = await this.client
-      .from("friendships")
-      .select("receiver_id")
-      .eq("requester_id", userId)
-      .eq("status", "accepted");
+    try {
+      const { data: sentFriends } = await this.client
+        .from("friendships")
+        .select("receiver_id")
+        .eq("requester_id", userId)
+        .eq("status", "accepted");
 
-    const { data: receivedFriends } = await this.client
-      .from("friendships")
-      .select("requester_id")
-      .eq("receiver_id", userId)
-      .eq("status", "accepted");
+      const { data: receivedFriends } = await this.client
+        .from("friendships")
+        .select("requester_id")
+        .eq("receiver_id", userId)
+        .eq("status", "accepted");
 
-    const friendIds = new Set<string>();
-    friendIds.add(userId);
-    for (const row of sentFriends ?? []) friendIds.add(row.receiver_id);
-    for (const row of receivedFriends ?? []) friendIds.add(row.requester_id);
+      const friendIds = new Set<string>();
+      friendIds.add(userId);
+      for (const row of sentFriends ?? []) friendIds.add(row.receiver_id);
+      for (const row of receivedFriends ?? []) friendIds.add(row.requester_id);
 
-    const { data } = await this.client
-      .from("profiles")
-      .select("id, username, display_name, total_points, ranking_tier, avatar_url")
-      .in("id", Array.from(friendIds))
-      .order("total_points", { ascending: false })
-      .limit(limit);
+      const { data } = await this.client
+        .from("profiles")
+        .select("id, username, display_name, total_points, ranking_tier, avatar_url")
+        .in("id", Array.from(friendIds))
+        .order("total_points", { ascending: false })
+        .limit(limit);
 
-    return (data ?? []) as LeaderboardEntry[];
+      return (data ?? []) as LeaderboardEntry[];
+    } catch {
+      return [];
+    }
   }
 
   async getUserRank(userId: string): Promise<number> {
-    const userPoints = await this.getPoints(userId);
+    try {
+      const userPoints = await this.getPoints(userId);
 
-    const { count } = await this.client
-      .from("profiles")
-      .select("id", { count: "exact", head: true })
-      .gt("total_points", userPoints);
+      const { count } = await this.client
+        .from("profiles")
+        .select("id", { count: "exact", head: true })
+        .gt("total_points", userPoints);
 
-    return (count ?? 0) + 1;
+      return (count ?? 0) + 1;
+    } catch {
+      return 0;
+    }
   }
 }

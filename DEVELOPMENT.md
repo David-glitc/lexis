@@ -323,3 +323,96 @@
 - Speed challenge load wrapped in try/catch with user-facing toast fallback
 - Supabase clients created per-action (not stored in component state) to avoid stale references
 
+## [2026-03-16T20:00Z] localStorage → Supabase DB Migration, Cookies, Notifications
+
+### PuzzleService Rewritten for Supabase
+- Removed singleton export, now class-based with `SupabaseClient` constructor
+- `finishPuzzle(userId, won, mode)` writes to `puzzle_logs` table
+- `saveDailyState(userId, ...)` upserts in-progress game state to DB
+- `getDailyState(userId, dateKey)` loads saved game from DB
+- `isDailyCompleted(userId, dateKey)` checks completion status in DB
+- `getHistory(userId)` fetches from `puzzle_logs` ordered by `created_at DESC`
+- `getStats(userId)` computes played/wins/streak/avgAttempts from DB
+- `getDailyHistory(userId)` returns date+solved pairs for calendar dots
+- Zero localStorage usage
+
+### PreferencesService (New)
+- Reads/writes `preferences` JSONB column on `profiles` table
+- Keys: hard_mode, high_contrast, vibration, notify_challenges, notify_daily, hide_timer, music_enabled
+- `get(userId)`, `set(userId, partial)`, `toggle(userId, key)` methods
+
+### NotificationService (New)
+- `isSupported()` / `getPermission()` / `requestPermission()` static methods
+- `subscribeToPush(userId)` registers service worker push subscription + saves to `push_subscriptions` table
+- `unsubscribeFromPush(userId)` removes subscription from browser + DB
+- `showLocal(title, options)` for local notifications
+
+### Cookie Consent Component
+- Displays consent banner after 1.5s if no `lexis_consent` cookie found
+- "Accept All" sets `lexis_consent=all` cookie (365 days)
+- "Essential Only" sets `lexis_consent=essential` cookie
+- Helper functions: `hasFullConsent()`, `hasAnyConsent()`
+
+### Notification Prompt Component
+- Appears after 8s for signed-in users if notification permission is "default"
+- "Enable" button triggers push subscription + shows local test notification
+- "Not now" sets dismissal cookie
+- Dismissal respected via `lexis_notif_dismissed` cookie
+
+### Settings Page Updates
+- All toggles (hard mode, high contrast, vibration) now read/write from DB preferences
+- Notification section: shows "Enable Push Notifications" button when not granted
+- Shows green checkmark when notifications are enabled
+- Challenge & Daily toggles connected to DB preferences (no longer localStorage)
+
+### Schema Updates (supabase-schema.sql)
+- `profiles.preferences` JSONB column
+- `puzzle_logs`: added `guesses TEXT[]`, `puzzle_id TEXT`, `date_key TEXT`, `status TEXT`
+- Updated mode constraint to include `daily_speed` and `speed`
+- Unique index on `(user_id, date_key)` WHERE mode='daily' for upsert support
+- `push_subscriptions` table with RLS for web push notifications
+
+### Play Page Updates
+- Stats modal loads stats asynchronously from DB
+- Daily calendar history loaded from DB on mount
+- Daily state restoration uses `rebuildRows()` to reconstruct board from stored guesses
+- All `finishPuzzle`, `saveDailyState` calls pass userId and hit Supabase
+
+---
+
+## [2026-03-16T23:50] Settings Profile Editor — Show Current Details
+
+### Settings Page (`settings/page.tsx`)
+- Profile section now shows a loading skeleton while fetching current profile data from DB
+- All form fields (display name, username, bio, avatar) are pre-populated with current saved values
+- Changed values show a "was: ..." hint beneath the field so users see what they're changing from
+- Save button is disabled and shows "No Changes" when nothing has been edited (dirty tracking)
+- Save button activates to "Save Changes" only when user modifies a field
+- After successful save, form resyncs with latest DB values and resets dirty state
+- Account section now displays a profile card with avatar, display name, username, and ranking tier
+- Added "Member Since" row showing when the user created their account
+
+---
+
+## [2026-03-17T00:15] Fix Supabase 404s, Services Resilience, Navigation & Speed Mode
+
+### Supabase Schema (`supabase-schema.sql`)
+- Completely rewritten as a single idempotent migration safe to re-run
+- All tables created with IF NOT EXISTS: profiles, puzzle_logs, friendships, challenges, points_ledger, daily_challenges, push_subscriptions
+- All RLS policies wrapped in DO $$ blocks to avoid duplicate policy errors
+- Added proper UNIQUE constraint on puzzle_logs(user_id, date_key) for upsert support
+- All columns (username, total_points, preferences, guesses, puzzle_id, date_key, status) included in base CREATE TABLE
+- **ACTION REQUIRED**: Copy-paste this file into Supabase SQL Editor → New Query → Run
+
+### Service Resilience (all services)
+- Every DB call in PuzzleService, ProfileService, PointsService, PreferencesService, DailyChallengeService wrapped in try/catch
+- All methods return safe fallback values (null, empty arrays, default objects) on DB failure
+- App remains fully functional offline or when tables don't exist yet
+- DailyChallengeService creates local fallback challenges when daily_challenges table is missing
+- Speed mode works with local fallback puzzle + timer even without DB
+
+### Play Page Navigation
+- Added profile icon to play page header (shows user initial letter or generic icon)
+- Added global bottom navigation bar matching all other pages (Play, Training, Challenges, Leaderboard, Profile)
+- Keyboard area has bottom margin to clear the nav bar on mobile
+
