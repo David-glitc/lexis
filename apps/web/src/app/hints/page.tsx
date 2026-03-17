@@ -299,7 +299,7 @@ export default function HintsPage() {
   const [wordCluesRevealed, setWordCluesRevealed] = useState<Set<number>>(new Set());
   const [answerRevealed, setAnswerRevealed] = useState(false);
   const [zeroPoints, setZeroPoints] = useState(false);
-  const toastTimeout = useRef<ReturnType<typeof setTimeout>>();
+  const toastTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const toast = useCallback((msg: string) => {
     if (toastTimeout.current) clearTimeout(toastTimeout.current);
