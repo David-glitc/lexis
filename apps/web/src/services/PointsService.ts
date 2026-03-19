@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { ProfileService } from "./ProfileService";
 
 export interface PointsLedgerEntry {
   id: string;
@@ -55,15 +56,19 @@ export class PointsService {
 
       const { data: profile } = await this.client
         .from("profiles")
-        .select("total_points")
+        .select("total_points, puzzles_won")
         .eq("id", userId)
         .single();
 
       const currentPoints = (profile?.total_points as number) ?? 0;
+      const puzzlesWon = (profile?.puzzles_won as number) ?? 0;
 
       const { error: updateError } = await this.client
         .from("profiles")
-        .update({ total_points: currentPoints + amount })
+        .update({ 
+          total_points: currentPoints + amount,
+          ranking_tier: ProfileService.computeTier(puzzlesWon)
+        })
         .eq("id", userId);
 
       return { error: updateError?.message ?? null };

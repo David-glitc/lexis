@@ -55,6 +55,20 @@ export class PuzzleService {
     const dateKey = this.extractDateKey(this.currentPuzzleId);
 
     try {
+      // Check if puzzle is already completed to prevent duplicate submissions
+      const existing = await this.client
+        .from("puzzle_logs")
+        .select("id, status")
+        .eq("user_id", userId)
+        .eq("puzzle_id", this.currentPuzzleId)
+        .in("status", ["won", "lost"])
+        .maybeSingle();
+
+      if (existing.data) {
+        console.log("[v0] Duplicate submission detected - puzzle already completed");
+        return result; // Don't resubmit if already completed
+      }
+
       if (dateKey) {
         await this.client.from("puzzle_logs").upsert(
           {

@@ -28,6 +28,7 @@ function SearchIcon() {
 function UserCard({
   name,
   email,
+  username,
   tier,
   wins,
   streak,
@@ -35,6 +36,7 @@ function UserCard({
 }: {
   name: string;
   email: string;
+  username?: string;
   tier: string;
   wins: number;
   streak: number;
@@ -43,20 +45,22 @@ function UserCard({
   return (
     <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4 card-hover">
       <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-white/[0.06] border border-white/10 flex items-center justify-center">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="w-10 h-10 rounded-xl bg-white/[0.06] border border-white/10 flex items-center justify-center flex-shrink-0">
             <span className="text-sm text-white font-display font-bold">{(name[0] ?? "?").toUpperCase()}</span>
           </div>
-          <div>
-            <div className="text-white text-sm font-body font-medium">{name}</div>
-            <div className="text-xs text-zinc-500 font-body">{email}</div>
+          <div className="min-w-0 flex-1">
+            <Link href={username ? `/user/${username}` : "#"} className="text-white text-sm font-body font-medium hover:text-[#6abf5e] transition-colors block truncate">
+              {name}
+            </Link>
+            <div className="text-xs text-zinc-500 font-body truncate">{username ? `@${username}` : email}</div>
           </div>
         </div>
-        <span className="text-[10px] text-zinc-500 capitalize font-mono uppercase tracking-wider">{tier}</span>
+        <span className="text-[10px] text-zinc-500 capitalize font-mono uppercase tracking-wider flex-shrink-0 ml-2">{tier}</span>
       </div>
-      <div className="flex items-center justify-between text-xs text-zinc-500 mb-3 font-mono">
+      <div className="grid grid-cols-2 gap-2 text-xs text-zinc-500 mb-3 font-mono mb-3">
         <span>{wins} wins</span>
-        <span>{streak} streak</span>
+        <span className="text-right">{streak} streak</span>
       </div>
       <div className="flex gap-2">{actions}</div>
     </div>
@@ -90,6 +94,7 @@ function FriendsTab({
           key={f.friendship_id}
           name={f.display_name}
           email={f.email}
+          username={f.friend_id} // Use friend_id as username placeholder for now
           tier={f.ranking_tier}
           wins={f.puzzles_won}
           streak={f.current_streak}
@@ -97,13 +102,13 @@ function FriendsTab({
             <>
               <button
                 onClick={() => onChallenge(f.friend_id)}
-                className="flex-1 text-xs py-1.5 rounded bg-white text-black hover:bg-zinc-200 transition-colors"
+                className="flex-1 text-xs py-1.5 rounded bg-white text-black hover:bg-zinc-200 transition-colors font-body"
               >
                 Challenge
               </button>
               <button
                 onClick={() => onRemove(f.friendship_id)}
-                className="flex-1 text-xs py-1.5 rounded bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700 transition-colors"
+                className="flex-1 text-xs py-1.5 rounded bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700 transition-colors font-body"
               >
                 Remove
               </button>

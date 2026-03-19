@@ -222,8 +222,26 @@ export class FriendsService {
     challengerId: string,
     challengedId: string,
     puzzleWord: string,
-    timeLimitSeconds?: number
+    timeLimitSeconds?: number,
+    mode: "daily" | "infinite" = "infinite"
   ): Promise<{ id: string | null; error: string | null }> {
+    // Validate daily challenge eligibility
+    if (mode === "daily") {
+      // Check if the challenged user has already played daily today
+      const today = new Date().toISOString().slice(0, 10);
+      const { data: dailyPlayed } = await this.client
+        .from("puzzle_logs")
+        .select("id")
+        .eq("user_id", challengedId)
+        .eq("mode", "daily")
+        .like("created_at", `${today}%`)
+        .maybeSingle();
+
+      if (dailyPlayed) {
+        return { id: null, error: "Challenged user has already played daily challenge today" };
+      }
+    }
+
     const expires = new Date();
     expires.setHours(expires.getHours() + 24);
 
@@ -299,7 +317,17 @@ export class FriendsService {
 
     if (!challenge) return { error: "Challenge not found" };
 
+    // Prevent duplicate submission - check if this user already submitted
     const isChallenger = challenge.challenger_id === userId;
+    const alreadySubmitted = isChallenger
+      ? challenge.challenger_attempts !== null
+      : challenge.challenged_attempts !== null;
+
+    if (alreadySubmitted) {
+      console.log("[v0] Duplicate challenge submission detected");
+      return { error: "You have already submitted a result for this challenge" };
+    }
+
     const update: Record<string, unknown> = isChallenger
       ? { challenger_attempts: attempts, challenger_time_ms: timeMs }
       : { challenged_attempts: attempts, challenged_time_ms: timeMs };

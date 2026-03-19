@@ -778,16 +778,24 @@ export default function PlayPage() {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     const sel = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    
     if (sel.getTime() === todayStart.getTime()) {
       startNewPuzzle("daily");
       setShowCalendar(false);
       return;
     }
+    
+    // Disable speed timer when viewing past daily puzzles
     setSpeedTimerActive(false);
     setSpeedChallenge(null);
+    setHideTimer(true);
+    
+    // Switch to daily mode and load the puzzle for the selected date
+    setMode("daily");
     const p = createDailyPuzzleForDate(date);
     const dateKey = formatDateKey(date);
     puzzleStarted.current = false;
+    
     if (user) {
       puzzleService.getDailyState(user.id, dateKey).then((saved) => {
         if (saved && saved.guesses.length > 0) {
@@ -800,7 +808,10 @@ export default function PlayPage() {
     } else {
       setPuzzle(p);
     }
+    
     setBounceRow(undefined);
+    setCurrentGuess("");
+    setRevealingRow(undefined);
     setShowCalendar(false);
   }
 
@@ -912,11 +923,12 @@ export default function PlayPage() {
         </div>
       )}
 
-      {speedTimeRemaining && (
-        <div className="flex justify-center px-4 py-1.5 shrink-0">
+      {/* Speed Timer - Fixed height to prevent layout jumping */}
+      <div className="h-[44px] flex justify-center px-4 py-1.5 shrink-0 border-b border-white/[0.06]">
+        {speedTimeRemaining ? (
           <div className="max-w-[320px] w-full">
             {hideTimer ? (
-              <div className="flex items-center justify-center gap-2">
+              <div className="flex items-center justify-center gap-2 h-full">
                 <span className="text-zinc-600 text-xs font-mono">Timer hidden</span>
                 <button
                   onClick={() => setHideTimer(false)}
@@ -930,7 +942,7 @@ export default function PlayPage() {
                 </button>
               </div>
             ) : (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 h-full">
                 <div className="flex-1 h-2 bg-white/[0.06] rounded-full overflow-hidden">
                   <div
                     className={`h-full rounded-full transition-all duration-200 ${
@@ -965,8 +977,10 @@ export default function PlayPage() {
               </div>
             )}
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="w-full" /> {/* Empty placeholder to maintain height */}
+        )}
+      </div>
 
       {/* Board */}
       <div className="flex-1 min-h-0 flex items-center justify-center overflow-hidden px-3 sm:px-4">

@@ -107,6 +107,19 @@ export class DailyChallengeService {
         return { withinTimeLimit: false, pointsAwarded: 0, error: "Challenge not found" };
       }
 
+      // Check for duplicate submission - user should only submit once per daily challenge
+      const { data: existingResult } = await this.client
+        .from("puzzle_logs")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("mode", "daily_speed")
+        .maybeSingle();
+
+      if (existingResult) {
+        console.log("[v0] Duplicate daily challenge submission detected");
+        return { withinTimeLimit: false, pointsAwarded: 0, error: "You already submitted for this challenge" };
+      }
+
       const timeLimitMs = (challenge as DailyChallenge).time_limit_seconds * 1000;
       const withinTimeLimit = timeMs < timeLimitMs;
       let pointsAwarded = 0;
