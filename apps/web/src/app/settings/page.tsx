@@ -74,6 +74,7 @@ export default function SettingsPage() {
   const [prefs, setPrefs] = useState<UserPreferences>({
     hard_mode: false, high_contrast: false, vibration: false,
     notify_challenges: false, notify_daily: false, hide_timer: false, music_enabled: false,
+    sfx_enabled: true, sfx_volume: 0.5,
   });
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>("default");
 
@@ -119,7 +120,7 @@ export default function SettingsPage() {
     return () => clearTimeout(timer);
   }, [username, profile?.username]);
 
-  function togglePref(key: keyof UserPreferences, value: boolean) {
+  function togglePref(key: keyof UserPreferences, value: UserPreferences[keyof UserPreferences]) {
     if (!user) return;
     setPrefs((prev) => ({ ...prev, [key]: value }));
     prefsService.set(user.id, { [key]: value }).catch(() => {});
@@ -359,6 +360,27 @@ export default function SettingsPage() {
                 <p className="text-xs font-body text-zinc-500">Ambient arena soundtrack</p>
               </div>
               <MusicToggle />
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-body text-white">Sound Effects</p>
+                <p className="text-xs font-body text-zinc-500">Key press, reveals, victory and defeat sounds</p>
+              </div>
+              <Toggle enabled={prefs.sfx_enabled} onChange={(v) => togglePref("sfx_enabled", v)} />
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-body text-white">SFX Volume</p>
+                <p className="text-xs font-mono text-zinc-500">{Math.round((prefs.sfx_volume ?? 0.5) * 100)}%</p>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={Math.round((prefs.sfx_volume ?? 0.5) * 100)}
+                onChange={(event) => togglePref("sfx_volume", Number(event.target.value) / 100)}
+                className="w-full accent-[#538d4e]"
+              />
             </div>
             <div className="flex items-center justify-between">
               <div>

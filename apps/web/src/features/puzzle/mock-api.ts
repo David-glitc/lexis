@@ -1,5 +1,6 @@
 import type { GuessLetter, GuessRow, LetterState } from "./board";
 import { wordService } from "../../services/WordService";
+import { toUtcDateKey } from "../../utils/utc-date";
 
 export interface MockPuzzle {
   id: string;
@@ -101,10 +102,9 @@ export function createMockPuzzle(): MockPuzzle {
 export function createDailyPuzzle(): MockPuzzle {
   const solution = wordService.getDailySolution();
   const d = new Date();
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dateKey = toUtcDateKey(d);
   return {
-    id: `daily-${d.getFullYear()}-${mm}-${dd}`,
+    id: `daily-${dateKey}`,
     solution,
     attempts: 0,
     rows: [],
@@ -115,10 +115,9 @@ export function createDailyPuzzle(): MockPuzzle {
 
 export function createDailyPuzzleForDate(date: Date): MockPuzzle {
   const solution = wordService.getDailySolutionForDate(date);
-  const dd = String(date.getDate()).padStart(2, "0");
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dateKey = toUtcDateKey(date);
   return {
-    id: `daily-${date.getFullYear()}-${mm}-${dd}`,
+    id: `daily-${dateKey}`,
     solution,
     attempts: 0,
     rows: [],

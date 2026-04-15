@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Board } from "../../features/puzzle/board";
 import { Keyboard, type KeyboardState } from "../../features/puzzle/keyboard";
 import {
@@ -18,9 +19,16 @@ import { useAuth } from "../../providers/AuthProvider";
 import { createClient } from "../../utils/supabase/client";
 import { PointsService } from "../../services/PointsService";
 import { DailyChallengeService, type DailyChallenge } from "../../services/DailyChallengeService";
+import { FriendsService } from "../../services/FriendsService";
+import { fromUtcDateKey, getUtcWeekdayShort, toUtcDateKey } from "../../utils/utc-date";
+import { PreferencesService } from "../../services/PreferencesService";
+import { SoundService } from "../../services/SoundService";
 
 const supabase = createClient();
 const puzzleService = new PuzzleService(supabase);
+const friendsService = new FriendsService(supabase);
+const preferencesService = new PreferencesService(supabase);
+const soundService = new SoundService();
 
 function deriveKeyboardState(puzzle: MockPuzzle): KeyboardState {
   const state: KeyboardState = {};
@@ -78,14 +86,13 @@ function getCountdownToMidnight(): string {
 
 function getDailyLabel(): string {
   const d = new Date();
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const days = ["Su", "M", "T", "W", "Th", "F", "S"];
-  return `${dd}-${mm}-${days[d.getDay()]}`;
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  return `${dd}-${mm}-${getUtcWeekdayShort(d)}`;
 }
 
 function formatDateKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return toUtcDateKey(d);
 }
 
 interface DailyHistoryEntry {
@@ -103,9 +110,7 @@ function DailyCalendar({ onSelectDate, history }: { onSelectDate: (date: Date) =
   const [viewDate, setViewDate] = useState(() => new Date());
 
   const today = useMemo(() => {
-    const t = new Date();
-    t.setHours(0, 0, 0, 0);
-    return t;
+    return fromUtcDateKey(toUtcDateKey(new Date()));
   }, []);
 
   const year = viewDate.getFullYear();
@@ -420,6 +425,8 @@ function rebuildRows(guesses: string[], solution: string): MockPuzzle["rows"] {
 }
 
 export default function PlayPage() {
+  const searchParams = useSearchParams();
+  const activeChallengeId = searchParams.get("challenge");
   const [mode, setMode] = useState<GameMode>("daily");
   const [puzzle, setPuzzle] = useState<MockPuzzle>(() => createDailyPuzzle());
   const [currentGuess, setCurrentGuess] = useState("");
@@ -444,6 +451,29 @@ export default function PlayPage() {
   const [hideTimer, setHideTimer] = useState(false);
   const [dailyHistory, setDailyHistory] = useState<DailyHistoryEntry[]>([]);
   const dailyStateLoaded = useRef(false);
+  const [sfxEnabled, setSfxEnabled] = useState(true);
+  const [sfxVolume, setSfxVolume] = useState(0.5);
+
+  useEffect(() => {
+    const challengeId = searchParams.get("challenge");
+    if (!challengeId) return;
+    if (!user) return;
+
+    friendsService.getChallengeById(challengeId).then((challenge) => {
+      if (!challenge) return;
+      setMode("challenge");
+      const seededPuzzle: MockPuzzle = {
+        id: challenge.puzzle_id ?? `challenge-${challenge.id}`,
+        solution: challenge.puzzle_word,
+        attempts: 0,
+        rows: [],
+        status: "playing",
+        invalidGuess: false,
+      };
+      puzzleStarted.current = false;
+      setPuzzle(seededPuzzle);
+    }).catch(() => {});
+  }, [searchParams, user]);
 
   useEffect(() => {
     if (!user) return;
@@ -462,6 +492,21 @@ export default function PlayPage() {
       }
     }).catch(() => {});
   }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    preferencesService.get(user.id).then((prefs) => {
+      setSfxEnabled(prefs.sfx_enabled);
+      setSfxVolume(prefs.sfx_volume);
+      soundService.setEnabled(prefs.sfx_enabled);
+      soundService.setVolume(prefs.sfx_volume);
+    }).catch(() => {});
+  }, [user]);
+
+  useEffect(() => {
+    soundService.setEnabled(sfxEnabled);
+    soundService.setVolume(sfxVolume);
+  }, [sfxEnabled, sfxVolume]);
 
   useEffect(() => {
     if (!puzzleStarted.current) {
@@ -580,10 +625,12 @@ export default function PlayPage() {
 
         setTimeout(() => {
           setRevealingRow(undefined);
+          soundService.play("tile_reveal");
           if (next.status === "won") {
             setBounceRow(rowIdx);
             const messages = ["Genius", "Magnificent", "Impressive", "Splendid", "Great", "Phew"];
             toast(messages[Math.min(next.attempts - 1, 5)], 2000);
+            soundService.play("victory");
             setSpeedTimerActive(false);
 
             if (user) {
@@ -591,6 +638,15 @@ export default function PlayPage() {
               const pointsService = new PointsService(supabase);
               const points = PointsService.getPointsForGuesses(next.attempts);
               pointsService.awardPoints(user.id, points, "puzzle_win", { mode, attempts: next.attempts }).catch(() => {});
+
+              if (mode === "challenge" && activeChallengeId) {
+                friendsService.submitChallengeResult(
+                  activeChallengeId,
+                  user.id,
+                  next.attempts,
+                  Date.now() - speedStartTime.current
+                ).catch(() => {});
+              }
 
               if (mode === "speed" && speedChallenge) {
                 const challengeService = new DailyChallengeService(supabase);
@@ -604,10 +660,20 @@ export default function PlayPage() {
             }, 2000);
           } else if (next.status === "lost") {
             toast(next.solution.toUpperCase(), 4000);
+            soundService.play("defeat");
             setSpeedTimerActive(false);
 
             if (user) {
               puzzleService.finishPuzzle(user.id, false, mode).catch(() => {});
+
+              if (mode === "challenge" && activeChallengeId) {
+                friendsService.submitChallengeResult(
+                  activeChallengeId,
+                  user.id,
+                  next.attempts,
+                  Date.now() - speedStartTime.current
+                ).catch(() => {});
+              }
 
               if (mode === "speed" && speedChallenge) {
                 const challengeService = new DailyChallengeService(supabase);
@@ -630,11 +696,12 @@ export default function PlayPage() {
       if (/^[a-z]$/.test(key) && currentGuess.length < 5) {
         const nextLen = currentGuess.length;
         setCurrentGuess((v) => v + key);
+        soundService.play("key_press");
         setPoppingCol(nextLen);
         setTimeout(() => setPoppingCol(undefined), 120);
       }
     },
-    [currentGuess, puzzle, toast, hardMode, revealingRow, mode, speedChallenge, user]
+    [currentGuess, puzzle, toast, hardMode, revealingRow, mode, speedChallenge, user, activeChallengeId]
   );
 
   useEffect(() => {

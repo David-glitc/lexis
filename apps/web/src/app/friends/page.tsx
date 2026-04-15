@@ -31,7 +31,8 @@ function UserCard({
   tier,
   wins,
   streak,
-  actions
+  actions,
+  online
 }: {
   name: string;
   email: string;
@@ -39,6 +40,7 @@ function UserCard({
   wins: number;
   streak: number;
   actions: React.ReactNode;
+  online?: boolean;
 }) {
   return (
     <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4 card-hover">
@@ -49,7 +51,15 @@ function UserCard({
           </div>
           <div>
             <div className="text-white text-sm font-body font-medium">{name}</div>
-            <div className="text-xs text-zinc-500 font-body">{email}</div>
+            <div className="text-xs text-zinc-500 font-body flex items-center gap-1.5">
+              <span>{email}</span>
+              {online !== undefined && (
+                <span className={`inline-flex items-center gap-1 ${online ? "text-emerald-400" : "text-zinc-600"}`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${online ? "bg-emerald-400" : "bg-zinc-600"}`} />
+                  {online ? "online" : "offline"}
+                </span>
+              )}
+            </div>
           </div>
         </div>
         <span className="text-[10px] text-zinc-500 capitalize font-mono uppercase tracking-wider">{tier}</span>
@@ -67,12 +77,14 @@ function FriendsTab({
   friends,
   userId,
   onRemove,
-  onChallenge
+  onChallenge,
+  onlineMap
 }: {
   friends: FriendWithProfile[];
   userId: string;
   onRemove: (id: string) => void;
   onChallenge: (friendId: string) => void;
+  onlineMap: Record<string, boolean>;
 }) {
   if (friends.length === 0) {
     return (
@@ -93,6 +105,7 @@ function FriendsTab({
           tier={f.ranking_tier}
           wins={f.puzzles_won}
           streak={f.current_streak}
+          online={onlineMap[f.friend_id]}
           actions={
             <>
               <button
@@ -288,6 +301,7 @@ export default function FriendsPage() {
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [dataLoading, setDataLoading] = useState(false);
+  const [onlineMap, setOnlineMap] = useState<Record<string, boolean>>({});
 
   const loadData = useCallback(async (userId: string) => {
     setDataLoading(true);
@@ -301,6 +315,21 @@ export default function FriendsPage() {
     setChallenges(challengesList);
     setDataLoading(false);
   }, []);
+
+  useEffect(() => {
+    if (!friends.length) return;
+    const ids = friends.map((friend) => friend.friend_id);
+    supabase.from("user_presence")
+      .select("user_id,status")
+      .in("user_id", ids)
+      .then(({ data }) => {
+        const next: Record<string, boolean> = {};
+        (data ?? []).forEach((row: any) => {
+          next[row.user_id] = row.status === "online" || row.status === "playing";
+        });
+        setOnlineMap(next);
+      });
+  }, [friends]);
 
   useEffect(() => {
     if (user) loadData(user.id);
@@ -426,6 +455,7 @@ export default function FriendsPage() {
             userId={user.id}
             onRemove={handleRemove}
             onChallenge={handleChallenge}
+            onlineMap={onlineMap}
           />
         )}
         {tab === "requests" && (

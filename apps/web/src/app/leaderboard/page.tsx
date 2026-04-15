@@ -6,8 +6,9 @@ import { useAuth } from "../../providers/AuthProvider";
 import { AppShell } from "../../components/layout/app-shell";
 import { createClient } from "../../utils/supabase/client";
 import { PointsService } from "../../services/PointsService";
+import { toUtcDateKey } from "../../utils/utc-date";
 
-type Tab = "global" | "friends";
+type Tab = "global" | "friends" | "daily_speed" | "infinite_speed";
 
 type LeaderboardEntry = {
   id: string;
@@ -67,8 +68,10 @@ function LeaderboardRow({
   isCurrentUser: boolean;
 }) {
   const topBorder = RANK_BORDER[rank] ?? "";
+  const profileHref = entry.username ? `/u/${entry.username}` : `/profile`;
   return (
-    <div
+    <Link
+      href={profileHref}
       className={`flex items-center gap-3 rounded-xl border px-4 py-3 transition-colors ${
         isCurrentUser
           ? "border-emerald-500/30 bg-emerald-500/[0.04]"
@@ -104,7 +107,7 @@ function LeaderboardRow({
           {formatPoints(entry.total_points)}
         </span>
       </div>
-    </div>
+    </Link>
   );
 }
 
@@ -143,19 +146,32 @@ export default function LeaderboardPage() {
   const { user, loading: authLoading } = useAuth();
   const [tab, setTab] = useState<Tab>("global");
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
+  const [dailySpeedEntries, setDailySpeedEntries] = useState<Array<{ user_id: string; username: string; display_name: string; attempts: number; time_ms: number }>>([]);
+  const [infiniteSpeedEntries, setInfiniteSpeedEntries] = useState<Array<{ user_id: string; username: string; display_name: string; weighted_score: number; runs: number }>>([]);
   const [userRank, setUserRank] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
   async function fetchLeaderboard(activeTab: Tab, userId: string | undefined) {
     setLoading(true);
     try {
-      const data =
-        activeTab === "global"
+      if (activeTab === "daily_speed") {
+        const todayKey = toUtcDateKey(new Date());
+        const data = await pointsService.getDailySpeedLeaderboard(todayKey, 50);
+        setDailySpeedEntries(data);
+        setEntries([]);
+      } else if (activeTab === "infinite_speed") {
+        const data = await pointsService.getInfiniteSpeedLeaderboard(50);
+        setInfiniteSpeedEntries(data);
+        setEntries([]);
+      } else {
+        const data =
+          activeTab === "global"
           ? await pointsService.getGlobalLeaderboard(50)
           : userId
             ? await pointsService.getFriendsLeaderboard(userId, 50)
             : [];
-      setEntries(data);
+        setEntries(data);
+      }
 
       if (userId) {
         const rank = await pointsService.getUserRank(userId);
@@ -184,6 +200,8 @@ export default function LeaderboardPage() {
   const tabs: { key: Tab; label: string }[] = [
     { key: "global", label: "Global" },
     { key: "friends", label: "Friends" },
+    { key: "daily_speed", label: "Daily Speed" },
+    { key: "infinite_speed", label: "Infinite Speed" },
   ];
 
   return (
@@ -227,6 +245,58 @@ export default function LeaderboardPage() {
               Sign In
             </Link>
           </div>
+        ) : tab === "daily_speed" ? (
+          dailySpeedEntries.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 gap-2">
+              <div className="text-white text-base font-display">No daily speed runs yet</div>
+              <p className="text-zinc-500 text-sm text-center font-body">
+                First successful run per user counts for today.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {dailySpeedEntries.map((entry, i) => (
+                <div key={`${entry.user_id}-${i}`} className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.03] px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <RankNumber rank={i + 1} />
+                    <div>
+                      <div className="text-sm text-white font-body">{entry.display_name}</div>
+                      <div className="text-xs text-zinc-500 font-body">@{entry.username}</div>
+                    </div>
+                  </div>
+                  <div className="text-xs text-zinc-300 font-mono">
+                    {entry.attempts} guesses · {Math.floor(entry.time_ms / 1000)}s
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        ) : tab === "infinite_speed" ? (
+          infiniteSpeedEntries.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 gap-2">
+              <div className="text-white text-base font-display">No infinite speed data yet</div>
+              <p className="text-zinc-500 text-sm text-center font-body">
+                Rankings apply diminishing returns to prevent farming.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {infiniteSpeedEntries.map((entry, i) => (
+                <div key={`${entry.user_id}-${i}`} className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.03] px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <RankNumber rank={i + 1} />
+                    <div>
+                      <div className="text-sm text-white font-body">{entry.display_name}</div>
+                      <div className="text-xs text-zinc-500 font-body">@{entry.username}</div>
+                    </div>
+                  </div>
+                  <div className="text-xs text-zinc-300 font-mono">
+                    {Math.round(entry.weighted_score)} pts · {entry.runs} runs
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
         ) : entries.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 gap-2">
             <div className="text-white text-base font-display">No rankings yet</div>

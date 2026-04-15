@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fromUtcDateKey, toUtcDateKey } from "../utils/utc-date";
 
 export interface PuzzleResult {
   puzzleId: string;
@@ -55,6 +56,20 @@ export class PuzzleService {
     const dateKey = this.extractDateKey(this.currentPuzzleId);
 
     try {
+      if (timeMs < 1500 || this.guesses.length === 0 || this.guesses.length > 6) {
+        await this.client.from("anti_cheat_events").insert({
+          user_id: userId,
+          session_id: null,
+          reason_code: "suspicious_puzzle_finalize",
+          detail: {
+            mode,
+            time_ms: timeMs,
+            guesses: this.guesses.length,
+            won,
+            puzzle_id: this.currentPuzzleId,
+          },
+        });
+      }
       if (dateKey) {
         await this.client.from("puzzle_logs").upsert(
           {
@@ -88,6 +103,8 @@ export class PuzzleService {
     } catch {
       // DB unavailable — silently continue
     }
+
+    await this.syncProfileStats(userId).catch(() => {});
 
     return result;
   }
@@ -263,5 +280,70 @@ export class PuzzleService {
   private extractDateKey(puzzleId: string): string | null {
     const match = puzzleId.match(/^daily-(\d{4}-\d{2}-\d{2})$/);
     return match ? match[1] : null;
+  }
+
+  private async syncProfileStats(userId: string): Promise<void> {
+    const { data: rows, error } = await this.client
+      .from("puzzle_logs")
+      .select("won, attempts, time_ms, mode, date_key, created_at")
+      .eq("user_id", userId)
+      .in("status", ["won", "lost"])
+      .order("created_at", { ascending: true });
+    if (error || !rows) return;
+
+    const played = rows.length;
+    const wonCount = rows.filter((r) => r.won).length;
+    const winRate = played > 0 ? Math.round((wonCount / played) * 100) : 0;
+
+    let maxStreak = 0;
+    let running = 0;
+    for (const row of rows) {
+      if (row.won) {
+        running += 1;
+        if (running > maxStreak) maxStreak = running;
+      } else {
+        running = 0;
+      }
+    }
+
+    const wonRows = rows.filter((r) => r.won);
+    const averageAttempts = wonRows.length > 0
+      ? Math.round((wonRows.reduce((sum, row) => sum + (row.attempts ?? 0), 0) / wonRows.length) * 10) / 10
+      : 0;
+    const totalTimeMs = rows.reduce((sum, row) => sum + (row.time_ms ?? 0), 0);
+    const fastestSolveMs = wonRows.length > 0
+      ? Math.min(...wonRows.map((row) => row.time_ms ?? Number.MAX_SAFE_INTEGER))
+      : 0;
+
+    const dailyWonDates = new Set(
+      rows
+        .filter((row) => row.mode === "daily" && row.won && row.date_key)
+        .map((row) => row.date_key as string)
+    );
+
+    const todayKey = toUtcDateKey(new Date());
+    let dailyCurrentStreak = 0;
+    let streakCursor = fromUtcDateKey(todayKey);
+    while (true) {
+      const key = toUtcDateKey(streakCursor);
+      if (!dailyWonDates.has(key)) break;
+      dailyCurrentStreak += 1;
+      streakCursor = new Date(streakCursor.getTime() - 86400000);
+    }
+
+    await this.client
+      .from("profiles")
+      .update({
+        puzzles_played: played,
+        puzzles_won: wonCount,
+        win_rate: winRate,
+        current_streak: dailyCurrentStreak,
+        max_streak: Math.max(maxStreak, dailyCurrentStreak),
+        average_attempts: averageAttempts,
+        total_time_ms: totalTimeMs,
+        fastest_solve_ms: fastestSolveMs === Number.MAX_SAFE_INTEGER ? 0 : fastestSolveMs,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", userId);
   }
 }

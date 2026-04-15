@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { wordService } from "./WordService";
 import { PointsService, POINT_VALUES } from "./PointsService";
+import { toUtcDateKey } from "../utils/utc-date";
 
 export interface DailyChallenge {
   id: string;
@@ -107,11 +108,22 @@ export class DailyChallengeService {
         return { withinTimeLimit: false, pointsAwarded: 0, error: "Challenge not found" };
       }
 
+      const utcDateKey = toUtcDateKey(new Date((challenge as DailyChallenge).date));
       const timeLimitMs = (challenge as DailyChallenge).time_limit_seconds * 1000;
       const withinTimeLimit = timeMs < timeLimitMs;
       let pointsAwarded = 0;
 
-      if (won && withinTimeLimit) {
+      const { data: existingDailySpeed } = await this.client
+        .from("puzzle_logs")
+        .select("id, won")
+        .eq("user_id", userId)
+        .eq("mode", "daily_speed")
+        .eq("date_key", utcDateKey)
+        .in("status", ["won", "lost"])
+        .limit(1);
+      const firstCompletion = !existingDailySpeed || existingDailySpeed.length === 0;
+
+      if (won && withinTimeLimit && firstCompletion) {
         pointsAwarded = (challenge as DailyChallenge).bonus_points;
         const pointsService = new PointsService(this.client);
         await pointsService.awardPoints(
@@ -123,10 +135,12 @@ export class DailyChallengeService {
       await this.client.from("puzzle_logs").insert({
         user_id: userId,
         puzzle_word: (challenge as DailyChallenge).puzzle_word,
+        puzzle_id: `daily-speed-${utcDateKey}`,
         mode: "daily_speed",
         attempts,
         time_ms: timeMs,
         won,
+        date_key: utcDateKey,
         status: won ? "won" : "lost",
         created_at: new Date().toISOString(),
       });

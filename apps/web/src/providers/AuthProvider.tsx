@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "../utils/supabase/client";
 import { AuthService } from "../services/AuthService";
+import { PresenceService } from "../services/PresenceService";
 
 interface AuthContextValue {
   user: User | null;
@@ -16,6 +17,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 const supabase = createClient();
 const authService = new AuthService(supabase);
+const presenceService = new PresenceService(supabase);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -30,14 +32,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     authService.getUser().then((u) => {
       setUser(u);
       setLoading(false);
+      if (u) presenceService.startHeartbeat(u.id);
     });
 
     const { data: { subscription } } = authService.onAuthStateChange((u) => {
+      if (!u && user) {
+        presenceService.stopHeartbeat(user.id);
+      }
       setUser(u);
+      if (u) presenceService.startHeartbeat(u.id);
     });
 
-    return () => subscription.unsubscribe();
-  }, []);
+    return () => {
+      subscription.unsubscribe();
+      if (user) presenceService.stopHeartbeat(user.id);
+    };
+  }, [user]);
 
   const signOut = async () => {
     await authService.signOut();

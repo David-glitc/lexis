@@ -1,3 +1,5 @@
+import { getUtcDayIndex } from "../utils/utc-date";
+
 const SOLUTION_WORDS: string[] = [
   "about","above","abuse","actor","acute","admit","adopt","adult","after","again",
   "agent","agree","ahead","alarm","album","alert","alien","align","alive","alley",
@@ -313,16 +315,12 @@ export class WordService {
   }
 
   getDailySolution(): string {
-    const epoch = new Date("2026-01-01").getTime();
-    const now = Date.now();
-    const dayIndex = Math.floor((now - epoch) / 86400000) % this.solutions.length;
+    const dayIndex = getUtcDayIndex(new Date()) % this.solutions.length;
     return this.solutions[dayIndex];
   }
 
   getDailySolutionForDate(date: Date): string {
-    const epoch = new Date("2026-01-01").getTime();
-    const target = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-    const dayIndex = Math.floor((target - epoch) / 86400000);
+    const dayIndex = getUtcDayIndex(date);
     if (dayIndex < 0) return this.solutions[0];
     return this.solutions[dayIndex % this.solutions.length];
   }

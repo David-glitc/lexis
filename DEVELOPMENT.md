@@ -458,3 +458,43 @@
 - Play mode selector wraps on narrow screens and uses smaller horizontal padding
 - Keyboard bottom spacing now accounts for safe-area + bottom nav: `mb-[calc(env(safe-area-inset-bottom)+64px)]`
 
+---
+
+## 2026-04-15 — Lexis Platform Upgrade (All Plan To-Dos)
+
+### Data Model + Security Foundation
+- Extended `apps/web/supabase-schema.sql` with production tables/policies for `daily_puzzles`, `puzzle_sessions`, `player_ratings`, `anti_cheat_events`, and `user_presence`
+- Added challenge seed fields (`seed`, `puzzle_id`) and immutable daily session constraints
+
+### Server-Authoritative API v2
+- Replaced `apps/server/main.ts` with authoritative `/v2` routes:
+  - `/v2/puzzles/session`, `/v2/puzzles/guess`, `/v2/puzzles/finalize`
+  - `/v2/challenges/create`, `/v2/challenges/submit`, `/v2/challenges/get`
+- Added signed session signature checks, user/IP-like rate control, anti-cheat event logging, and expanded `/metrics` counters
+- Added `AuthoritativeGameService` client wrapper for web integration path
+
+### Daily/Challenge/Leaderboard Integrity
+- Refactored daily date handling to UTC via `src/utils/utc-date.ts`
+- Updated deterministic daily puzzle IDs and solution selection to UTC-safe mapping
+- Challenge creation now uses unique seed and challenge puzzle id in `FriendsService`
+- `play` now loads `?challenge=` puzzle context and submits challenge results after completion
+- Added segmented leaderboard methods for first-only `daily_speed` and diminishing-return `infinite_speed`
+- Updated leaderboard UI with new `Daily Speed` and `Infinite Speed` tabs
+
+### Stats, Social, Presence, and Sound
+- `PuzzleService` now recomputes/stores authoritative profile stats + daily streaks after puzzle finalization
+- Added public profile route: `/u/[username]` with Add Friend action
+- Leaderboard entries are now tappable profile links
+- Added realtime presence foundation (`PresenceService`) with auth heartbeat updates and friends page online indicators
+- Added modular `SoundService` (keypress, reveal, victory, defeat, notification)
+- Added settings controls for `sfx_enabled` and `sfx_volume` persisted via preferences
+
+### Puzzle Arena + Tests
+- Added `/arena` with “Coming Soon” placeholders for Word Ladder, Anagram Blitz, Crossword Mini
+- Added Puzzle Arena nav entries in `AppShell`
+- Added Jest baseline in `apps/web/jest.config.cjs`
+- Added tests:
+  - `src/utils/utc-date.test.ts`
+  - `src/features/puzzle/mock-api.test.ts`
+- Test run result: 2 suites passed, 6 tests passed
+

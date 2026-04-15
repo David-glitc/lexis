@@ -28,6 +28,8 @@ export interface Challenge {
   id: string;
   challenger_id: string;
   challenged_id: string;
+  seed: string | null;
+  puzzle_id: string | null;
   puzzle_word: string;
   challenger_attempts: number | null;
   challenger_time_ms: number | null;
@@ -226,12 +228,16 @@ export class FriendsService {
   ): Promise<{ id: string | null; error: string | null }> {
     const expires = new Date();
     expires.setHours(expires.getHours() + 24);
+    const seed = crypto.randomUUID().replace(/-/g, "");
+    const puzzleId = `challenge-${seed.slice(0, 10)}`;
 
     const { data, error } = await this.client
       .from("challenges")
       .insert({
         challenger_id: challengerId,
         challenged_id: challengedId,
+        seed,
+        puzzle_id: puzzleId,
         puzzle_word: puzzleWord,
         status: "pending",
         time_limit_seconds: timeLimitSeconds ?? null,
@@ -291,6 +297,16 @@ export class FriendsService {
     attempts: number,
     timeMs: number
   ): Promise<{ error: string | null }> {
+    if (attempts < 1 || attempts > 6 || timeMs < 0) {
+      await this.client.from("anti_cheat_events").insert({
+        user_id: userId,
+        challenge_id: challengeId,
+        reason_code: "invalid_challenge_result_payload",
+        detail: { attempts, time_ms: timeMs },
+      });
+      return { error: "Invalid challenge result" };
+    }
+
     const { data: challenge } = await this.client
       .from("challenges")
       .select("*")

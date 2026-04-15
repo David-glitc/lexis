@@ -8,6 +8,8 @@ export interface UserPreferences {
   notify_daily: boolean;
   hide_timer: boolean;
   music_enabled: boolean;
+  sfx_enabled: boolean;
+  sfx_volume: number;
 }
 
 const DEFAULTS: UserPreferences = {
@@ -18,6 +20,8 @@ const DEFAULTS: UserPreferences = {
   notify_daily: false,
   hide_timer: false,
   music_enabled: false,
+  sfx_enabled: true,
+  sfx_volume: 0.5,
 };
 
 export class PreferencesService {

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { toUtcDateKey } from "../utils/utc-date";
 
 export interface PointsLedgerEntry {
   id: string;
@@ -43,11 +44,28 @@ export class PointsService {
     metadata: Record<string, any> = {}
   ): Promise<{ error: string | null }> {
     try {
+      let adjustedAmount = amount;
+      const mode = typeof metadata.mode === "string" ? metadata.mode : "";
+      if (mode === "infinite") {
+        const todayKey = toUtcDateKey(new Date());
+        const { count } = await this.client
+          .from("points_ledger")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", userId)
+          .eq("reason", "puzzle_win")
+          .eq("metadata->>mode", "infinite")
+          .gte("created_at", `${todayKey}T00:00:00.000Z`);
+
+        const sameDayInfiniteWins = count ?? 0;
+        const weight = sameDayInfiniteWins <= 5 ? 1 : sameDayInfiniteWins <= 12 ? 0.5 : 0.25;
+        adjustedAmount = Math.max(1, Math.floor(amount * weight));
+      }
+
       const { error: ledgerError } = await this.client.from("points_ledger").insert({
         user_id: userId,
-        amount,
+        amount: adjustedAmount,
         reason,
-        metadata,
+        metadata: { ...metadata, original_amount: amount, adjusted_amount: adjustedAmount },
         created_at: new Date().toISOString(),
       });
 
@@ -63,12 +81,90 @@ export class PointsService {
 
       const { error: updateError } = await this.client
         .from("profiles")
-        .update({ total_points: currentPoints + amount })
+        .update({ total_points: currentPoints + adjustedAmount })
         .eq("id", userId);
 
       return { error: updateError?.message ?? null };
     } catch {
       return { error: "DB unavailable" };
+    }
+  }
+
+  async getDailySpeedLeaderboard(dateKey: string, limit = 50): Promise<Array<{
+    user_id: string;
+    username: string;
+    display_name: string;
+    attempts: number;
+    time_ms: number;
+  }>> {
+    try {
+      const { data } = await this.client
+        .from("puzzle_logs")
+        .select("user_id, attempts, time_ms, created_at, profiles(username, display_name)")
+        .eq("mode", "daily_speed")
+        .eq("date_key", dateKey)
+        .eq("won", true)
+        .order("attempts", { ascending: true })
+        .order("time_ms", { ascending: true })
+        .order("created_at", { ascending: true });
+
+      if (!data) return [];
+      const firstByUser = new Map<string, any>();
+      for (const row of data as any[]) {
+        if (!firstByUser.has(row.user_id)) firstByUser.set(row.user_id, row);
+      }
+
+      return Array.from(firstByUser.values()).slice(0, limit).map((row) => ({
+        user_id: row.user_id,
+        username: row.profiles?.username ?? "",
+        display_name: row.profiles?.display_name ?? "",
+        attempts: row.attempts,
+        time_ms: row.time_ms,
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  async getInfiniteSpeedLeaderboard(limit = 50): Promise<Array<{
+    user_id: string;
+    username: string;
+    display_name: string;
+    weighted_score: number;
+    runs: number;
+  }>> {
+    try {
+      const { data } = await this.client
+        .from("puzzle_logs")
+        .select("user_id, attempts, time_ms, won, profiles(username, display_name)")
+        .eq("mode", "speed")
+        .eq("won", true)
+        .order("created_at", { ascending: false })
+        .limit(3000);
+
+      if (!data) return [];
+      const byUser = new Map<string, { username: string; display_name: string; weighted_score: number; runs: number }>();
+
+      for (const row of data as any[]) {
+        const existing = byUser.get(row.user_id) ?? {
+          username: row.profiles?.username ?? "",
+          display_name: row.profiles?.display_name ?? "",
+          weighted_score: 0,
+          runs: 0,
+        };
+        const base = Math.max(1, 200 - row.attempts * 20 - Math.floor((row.time_ms ?? 0) / 2000));
+        const weight = existing.runs < 20 ? 1 : existing.runs < 50 ? 0.5 : 0.2;
+        existing.weighted_score += base * weight;
+        existing.runs += 1;
+        byUser.set(row.user_id, existing);
+      }
+
+      return Array.from(byUser.entries())
+        .map(([user_id, value]) => ({ user_id, ...value }))
+        .sort((a, b) => b.weighted_score - a.weighted_score)
+        .slice(0, limit);
+    } catch {
+      return [];
     }
   }
 
