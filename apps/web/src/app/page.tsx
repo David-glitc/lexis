@@ -128,16 +128,16 @@ function Marquee() {
 }
 
 export default function HomePage() {
-  const { user, loading } = useAuth();
+  const { user } = useAuth();
   const router = useRouter();
   const revealRef = useReveal();
   const parallaxRef = useParallax();
 
   useEffect(() => {
-    if (!loading && user) router.replace("/play");
-  }, [user, loading, router]);
+    if (user) router.replace("/play");
+  }, [user, router]);
 
-  if (loading || user) {
+  if (user) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#060606]">
         <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/20 border-t-white" />
