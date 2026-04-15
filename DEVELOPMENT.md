@@ -498,3 +498,10 @@
   - `src/features/puzzle/mock-api.test.ts`
 - Test run result: 2 suites passed, 6 tests passed
 
+### Push Notification Sender (Server)
+- Added server-side push sender wiring in `apps/server/main.ts` using VAPID (`npm:web-push`)
+- Challenge create now triggers push to challenged user
+- Challenge completion now triggers push to both participants
+- Added secured daily broadcast endpoint: `POST /v2/notifications/daily-broadcast` (requires `x-cron-secret`)
+- Added push delivery metrics counters: `push_sent`, `push_failed`
+

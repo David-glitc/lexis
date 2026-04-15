@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { verifyAuthHeader } from "./supabase.ts";
+import webpush from "npm:web-push@3.6.7";
 
 type LetterResult = "correct" | "present" | "absent";
 type GameMode = "daily" | "infinite" | "challenge" | "daily_speed" | "speed";
@@ -91,6 +92,8 @@ const metrics = {
   total_errors: 0,
   rate_limited: 0,
   anti_cheat_events: 0,
+  push_sent: 0,
+  push_failed: 0,
   routes: {} as Record<string, { count: number; total_duration_ms: number }>,
 };
 
@@ -185,6 +188,68 @@ async function checkRateLimit(kv: Deno.Kv, userId: string): Promise<boolean> {
 async function logAntiCheat(kv: Deno.Kv, payload: Record<string, unknown>) {
   metrics.anti_cheat_events++;
   await kv.set(["v2", "anti_cheat", crypto.randomUUID()], { ...payload, created_at: new Date().toISOString() });
+}
+
+type PushSubscriptionRow = { endpoint: string; p256dh: string; auth: string };
+
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const VAPID_PUBLIC_KEY = Deno.env.get("VAPID_PUBLIC_KEY") ?? "";
+const VAPID_PRIVATE_KEY = Deno.env.get("VAPID_PRIVATE_KEY") ?? "";
+const VAPID_SUBJECT = Deno.env.get("VAPID_SUBJECT") ?? "mailto:admin@lexisword.app";
+
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+}
+
+async function fetchPushSubscriptions(userId: string): Promise<PushSubscriptionRow[]> {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return [];
+  const url = `${SUPABASE_URL}/rest/v1/push_subscriptions?user_id=eq.${userId}&select=endpoint,p256dh,auth`;
+  const response = await fetch(url, {
+    headers: {
+      apikey: SUPABASE_SERVICE_ROLE_KEY,
+      authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+    },
+  });
+  if (!response.ok) return [];
+  return (await response.json()) as PushSubscriptionRow[];
+}
+
+async function deletePushSubscription(endpoint: string): Promise<void> {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return;
+  const url = `${SUPABASE_URL}/rest/v1/push_subscriptions?endpoint=eq.${encodeURIComponent(endpoint)}`;
+  await fetch(url, {
+    method: "DELETE",
+    headers: {
+      apikey: SUPABASE_SERVICE_ROLE_KEY,
+      authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+    },
+  }).catch(() => {});
+}
+
+async function sendPushToUser(userId: string, payload: { title: string; body: string; url: string }): Promise<void> {
+  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return;
+  const subscriptions = await fetchPushSubscriptions(userId);
+  if (!subscriptions.length) return;
+  const body = JSON.stringify(payload);
+  for (const sub of subscriptions) {
+    try {
+      await webpush.sendNotification(
+        {
+          endpoint: sub.endpoint,
+          keys: { p256dh: sub.p256dh, auth: sub.auth },
+        } as any,
+        body
+      );
+      metrics.push_sent++;
+    } catch (error: any) {
+      metrics.push_failed++;
+      const statusCode = Number(error?.statusCode ?? 0);
+      if (statusCode === 404 || statusCode === 410) {
+        await deletePushSubscription(sub.endpoint);
+      }
+    }
+  }
 }
 
 async function handleCreateSession(req: Request): Promise<Response> {
@@ -303,6 +368,11 @@ async function handleCreateChallenge(req: Request): Promise<Response> {
     winnerId: null,
   };
   await kv.set([...CHALLENGE_KEY_PREFIX, challengeId], challenge);
+  await sendPushToUser(opponentId, {
+    title: "New Lexis Challenge",
+    body: "You have a new challenge waiting. Tap to play.",
+    url: "/challenges",
+  });
   return jsonResponse(challenge);
 }
 
@@ -351,7 +421,53 @@ async function handleSubmitChallenge(req: Request): Promise<Response> {
     else challenge.winnerId = null;
   }
   await kv.set([...CHALLENGE_KEY_PREFIX, challenge.id], challenge);
+  if (challenge.status === "completed") {
+    const winnerText = challenge.winnerId ? "Winner decided. Check your result." : "Draw. Great duel.";
+    await Promise.all([
+      sendPushToUser(challenge.creatorId, {
+        title: "Challenge Completed",
+        body: winnerText,
+        url: "/challenges",
+      }),
+      sendPushToUser(challenge.opponentId, {
+        title: "Challenge Completed",
+        body: winnerText,
+        url: "/challenges",
+      }),
+    ]);
+  }
   return jsonResponse(challenge);
+}
+
+async function handleDailyPushBroadcast(req: Request): Promise<Response> {
+  const cronSecret = Deno.env.get("CRON_SECRET") ?? "";
+  const provided = req.headers.get("x-cron-secret") ?? "";
+  if (!cronSecret || provided !== cronSecret) return errorResponse("Forbidden", 403);
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    return errorResponse("Supabase service key not configured", 500);
+  }
+
+  const profilesResponse = await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=id,preferences`, {
+    headers: {
+      apikey: SUPABASE_SERVICE_ROLE_KEY,
+      authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+    },
+  });
+  if (!profilesResponse.ok) return errorResponse("Could not fetch profiles", 500);
+  const profiles = (await profilesResponse.json()) as Array<{ id: string; preferences?: Record<string, unknown> }>;
+
+  let notified = 0;
+  for (const profile of profiles) {
+    if (profile.preferences?.notify_daily === true) {
+      await sendPushToUser(profile.id, {
+        title: "Lexis Daily Puzzle",
+        body: "Today's puzzle is live. Keep your streak alive.",
+        url: "/play",
+      });
+      notified += 1;
+    }
+  }
+  return jsonResponse({ ok: true, users_notified: notified });
 }
 
 async function handleGetChallenge(req: Request): Promise<Response> {
@@ -385,6 +501,8 @@ async function handler(req: Request): Promise<Response> {
         total_errors: metrics.total_errors,
         rate_limited: metrics.rate_limited,
         anti_cheat_events: metrics.anti_cheat_events,
+        push_sent: metrics.push_sent,
+        push_failed: metrics.push_failed,
         uptime_ms: Date.now() - SERVER_START,
         routes: routeMetrics,
       });
@@ -400,6 +518,8 @@ async function handler(req: Request): Promise<Response> {
       response = await handleSubmitChallenge(req);
     } else if (method === "GET" && pathname === "/v2/challenges/get") {
       response = await handleGetChallenge(req);
+    } else if (method === "POST" && pathname === "/v2/notifications/daily-broadcast") {
+      response = await handleDailyPushBroadcast(req);
     } else {
       response = errorResponse("Not found", 404);
     }
