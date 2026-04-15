@@ -505,3 +505,7 @@
 - Added secured daily broadcast endpoint: `POST /v2/notifications/daily-broadcast` (requires `x-cron-secret`)
 - Added push delivery metrics counters: `push_sent`, `push_failed`
 
+### 2026-03-16 23:15 - Deploy Cron Activation
+- Refactored daily notification logic into reusable `runDailyBroadcast()` and reused it for both HTTP endpoint and scheduled execution.
+- Registered production cron using `Deno.cron("lexis-daily-push", "0 7 * * *", ...)` so daily reminders run automatically on Deno Deploy.
+

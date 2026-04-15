@@ -252,6 +252,36 @@ async function sendPushToUser(userId: string, payload: { title: string; body: st
   }
 }
 
+async function runDailyBroadcast(): Promise<{ ok: boolean; users_notified: number; reason?: string }> {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    return { ok: false, users_notified: 0, reason: "Supabase service key not configured" };
+  }
+
+  const profilesResponse = await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=id,preferences`, {
+    headers: {
+      apikey: SUPABASE_SERVICE_ROLE_KEY,
+      authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+    },
+  });
+  if (!profilesResponse.ok) {
+    return { ok: false, users_notified: 0, reason: "Could not fetch profiles" };
+  }
+  const profiles = (await profilesResponse.json()) as Array<{ id: string; preferences?: Record<string, unknown> }>;
+
+  let notified = 0;
+  for (const profile of profiles) {
+    if (profile.preferences?.notify_daily === true) {
+      await sendPushToUser(profile.id, {
+        title: "Lexis Daily Puzzle",
+        body: "Today's puzzle is live. Keep your streak alive.",
+        url: "/play",
+      });
+      notified += 1;
+    }
+  }
+  return { ok: true, users_notified: notified };
+}
+
 async function handleCreateSession(req: Request): Promise<Response> {
   const auth = await verifyAuthHeader(req.headers.get("authorization"));
   if (!auth) return errorResponse("Unauthorized", 401);
@@ -443,31 +473,9 @@ async function handleDailyPushBroadcast(req: Request): Promise<Response> {
   const cronSecret = Deno.env.get("CRON_SECRET") ?? "";
   const provided = req.headers.get("x-cron-secret") ?? "";
   if (!cronSecret || provided !== cronSecret) return errorResponse("Forbidden", 403);
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    return errorResponse("Supabase service key not configured", 500);
-  }
-
-  const profilesResponse = await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=id,preferences`, {
-    headers: {
-      apikey: SUPABASE_SERVICE_ROLE_KEY,
-      authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-    },
-  });
-  if (!profilesResponse.ok) return errorResponse("Could not fetch profiles", 500);
-  const profiles = (await profilesResponse.json()) as Array<{ id: string; preferences?: Record<string, unknown> }>;
-
-  let notified = 0;
-  for (const profile of profiles) {
-    if (profile.preferences?.notify_daily === true) {
-      await sendPushToUser(profile.id, {
-        title: "Lexis Daily Puzzle",
-        body: "Today's puzzle is live. Keep your streak alive.",
-        url: "/play",
-      });
-      notified += 1;
-    }
-  }
-  return jsonResponse({ ok: true, users_notified: notified });
+  const result = await runDailyBroadcast();
+  if (!result.ok) return errorResponse(result.reason ?? "Daily broadcast failed", 500);
+  return jsonResponse(result);
 }
 
 async function handleGetChallenge(req: Request): Promise<Response> {
@@ -539,5 +547,15 @@ async function handler(req: Request): Promise<Response> {
 }
 
 const port = parseInt(Deno.env.get("PORT") ?? "8000");
+if ((Deno as any).cron) {
+  Deno.cron("lexis-daily-push", "0 7 * * *", async () => {
+    const result = await runDailyBroadcast();
+    if (!result.ok) {
+      logger.error("Daily cron push failed", { reason: result.reason ?? "Unknown reason" });
+      return;
+    }
+    logger.info("Daily cron push completed", { users_notified: result.users_notified });
+  });
+}
 logger.info("Lexis API server started", { port, env: Deno.env.get("DENO_ENV") ?? "production" });
 serve(handler, { port });
