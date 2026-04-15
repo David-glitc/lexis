@@ -216,7 +216,7 @@ function SettingsIcon() {
   );
 }
 
-type GameMode = "daily" | "infinite" | "speed";
+type GameMode = "daily" | "infinite" | "speed" | "challenge";
 
 function GuessDistribution({ history }: { history: { attempts: number; won: boolean }[] }) {
   const dist: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
