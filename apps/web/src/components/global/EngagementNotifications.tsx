@@ -35,12 +35,13 @@ export function EngagementNotifications() {
 
     const supabase = createClient();
     const prefsService = new PreferencesService(supabase);
+    const currentUserId = user.id;
 
     async function tick() {
       if (checkingRef.current) return;
       checkingRef.current = true;
       try {
-        const prefs = await prefsService.get(user.id);
+        const prefs = await prefsService.get(currentUserId);
 
         if (prefs.notify_daily) {
           const today = toUtcDateKey(new Date());
@@ -57,7 +58,7 @@ export function EngagementNotifications() {
           const { count } = await supabase
             .from("challenges")
             .select("id", { count: "exact", head: true })
-            .eq("challenged_id", user.id)
+            .eq("challenged_id", currentUserId)
             .eq("status", "pending");
 
           const pendingCount = count ?? 0;
