@@ -44,6 +44,24 @@ export class PointsService {
     metadata: Record<string, any> = {}
   ): Promise<{ error: string | null }> {
     try {
+      const idempotencyKey =
+        typeof metadata.idempotency_key === "string" && metadata.idempotency_key.length > 0
+          ? metadata.idempotency_key
+          : null;
+      if (idempotencyKey) {
+        const { data: existingAward } = await this.client
+          .from("points_ledger")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("reason", reason)
+          .eq("metadata->>idempotency_key", idempotencyKey)
+          .limit(1)
+          .maybeSingle();
+        if (existingAward) {
+          return { error: null };
+        }
+      }
+
       let adjustedAmount = amount;
       const mode = typeof metadata.mode === "string" ? metadata.mode : "";
       if (mode === "infinite") {
@@ -81,10 +99,25 @@ export class PointsService {
 
       const { error: updateError } = await this.client
         .from("profiles")
-        .update({ total_points: currentPoints + adjustedAmount })
+        .update({ total_points: currentPoints + adjustedAmount, updated_at: new Date().toISOString() })
         .eq("id", userId);
 
-      return { error: updateError?.message ?? null };
+      if (updateError) return { error: updateError.message };
+
+      const { data: allLedgerRows } = await this.client
+        .from("points_ledger")
+        .select("amount")
+        .eq("user_id", userId);
+      const canonicalTotalPoints = (allLedgerRows ?? []).reduce(
+        (sum, row) => sum + (Number((row as { amount: number }).amount) || 0),
+        0
+      );
+      await this.client
+        .from("profiles")
+        .update({ total_points: canonicalTotalPoints, updated_at: new Date().toISOString() })
+        .eq("id", userId);
+
+      return { error: null };
     } catch {
       return { error: "DB unavailable" };
     }

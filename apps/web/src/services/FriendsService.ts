@@ -50,6 +50,7 @@ export class FriendsService {
   }
 
   async sendFriendRequest(requesterId: string, receiverId: string): Promise<{ error: string | null }> {
+    try {
     if (requesterId === receiverId) {
       return { error: "Cannot send friend request to yourself" };
     }
@@ -59,6 +60,18 @@ export class FriendsService {
       if (existing.status === "accepted") return { error: "Already friends" };
       if (existing.status === "pending") return { error: "Request already pending" };
       if (existing.status === "blocked") return { error: "This user is blocked" };
+      if (existing.status === "declined") {
+        const { error } = await this.client
+          .from("friendships")
+          .update({
+            requester_id: requesterId,
+            receiver_id: receiverId,
+            status: "pending",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", existing.id);
+        return { error: error?.message ?? null };
+      }
     }
 
     const { error } = await this.client.from("friendships").insert({
@@ -68,8 +81,13 @@ export class FriendsService {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     });
-
+    if (error?.message?.toLowerCase().includes("duplicate") || error?.message?.toLowerCase().includes("unique")) {
+      return { error: "Request already pending" };
+    }
     return { error: error?.message ?? null };
+    } catch {
+      return { error: "Could not send friend request" };
+    }
   }
 
   async acceptFriendRequest(friendshipId: string, userId: string): Promise<{ error: string | null }> {
@@ -128,10 +146,10 @@ export class FriendsService {
       .from("friendships")
       .select("*")
       .or(
-        `and(requester_id.eq.${userA},receiver_id.eq.${userB}),and(requester_id.eq.${userA.replace(userA, userB)},receiver_id.eq.${userA})`
+        `and(requester_id.eq.${userA},receiver_id.eq.${userB}),and(requester_id.eq.${userB},receiver_id.eq.${userA})`
       )
       .limit(1)
-      .single();
+      .maybeSingle();
 
     return data as Friendship | null;
   }
@@ -316,6 +334,12 @@ export class FriendsService {
     if (!challenge) return { error: "Challenge not found" };
 
     const isChallenger = challenge.challenger_id === userId;
+    const alreadySubmitted = isChallenger
+      ? challenge.challenger_attempts !== null
+      : challenge.challenged_attempts !== null;
+    if (alreadySubmitted) {
+      return { error: null };
+    }
     const update: Record<string, unknown> = isChallenger
       ? { challenger_attempts: attempts, challenger_time_ms: timeMs }
       : { challenged_attempts: attempts, challenged_time_ms: timeMs };

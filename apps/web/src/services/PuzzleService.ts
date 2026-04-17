@@ -43,7 +43,7 @@ export class PuzzleService {
   }
 
   async finishPuzzle(userId: string, won: boolean, mode: string): Promise<PuzzleResult> {
-    const timeMs = Date.now() - this.startTime;
+    const timeMs = Math.max(0, Date.now() - this.startTime);
     const result: PuzzleResult = {
       puzzleId: this.currentPuzzleId,
       solution: this.currentSolution,
@@ -70,6 +70,7 @@ export class PuzzleService {
           },
         });
       }
+      const normalizedStatus = won ? "won" : "lost";
       if (dateKey) {
         await this.client.from("puzzle_logs").upsert(
           {
@@ -82,7 +83,7 @@ export class PuzzleService {
             mode,
             guesses: this.guesses,
             date_key: dateKey,
-            status: won ? "won" : "lost",
+            status: normalizedStatus,
           },
           { onConflict: "user_id,date_key", ignoreDuplicates: false }
         );

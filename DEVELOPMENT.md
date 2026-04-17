@@ -521,3 +521,9 @@
 - Friends page now differentiates initial loading vs background refresh to keep visible data stable while reloading.
 - Play and Settings async effects now include cancellation guards to prevent stale state writes during rapid navigation.
 
+### 2026-03-17 00:34 - Service Write Hardening
+- Added idempotency support to points awarding via `metadata.idempotency_key` and canonical profile point reconciliation from ledger totals.
+- Added challenge submission duplicate-write protection and safer friend request duplicate handling.
+- Switched friendship fetch to `maybeSingle()` to avoid spurious exceptions on empty/duplicate matches.
+- Added idempotent puzzle win point awards in Play flow with deterministic keys per user/mode/puzzle.
+

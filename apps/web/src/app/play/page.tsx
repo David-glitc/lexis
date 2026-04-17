@@ -652,7 +652,12 @@ export default function PlayPage() {
               puzzleService.finishPuzzle(user.id, true, mode).catch(() => {});
               const pointsService = new PointsService(supabase);
               const points = PointsService.getPointsForGuesses(next.attempts);
-              pointsService.awardPoints(user.id, points, "puzzle_win", { mode, attempts: next.attempts }).catch(() => {});
+              pointsService.awardPoints(user.id, points, "puzzle_win", {
+                mode,
+                attempts: next.attempts,
+                puzzle_id: next.id,
+                idempotency_key: `${user.id}:${mode}:${next.id}:puzzle_win`,
+              }).catch(() => {});
 
               if (mode === "challenge" && activeChallengeId) {
                 friendsService.submitChallengeResult(
