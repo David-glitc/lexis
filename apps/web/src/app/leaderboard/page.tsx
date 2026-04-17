@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useAuth } from "../../providers/AuthProvider";
 import { AppShell } from "../../components/layout/app-shell";
@@ -150,17 +150,23 @@ export default function LeaderboardPage() {
   const [infiniteSpeedEntries, setInfiniteSpeedEntries] = useState<Array<{ user_id: string; username: string; display_name: string; weighted_score: number; runs: number }>>([]);
   const [userRank, setUserRank] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const requestIdRef = useRef(0);
 
-  const fetchLeaderboard = useCallback(async (activeTab: Tab, userId: string | undefined) => {
-    setLoading(true);
+  const fetchLeaderboard = useCallback(async (activeTab: Tab, userId: string | undefined, initial = false) => {
+    const requestId = ++requestIdRef.current;
+    if (initial) setLoading(true);
+    else setRefreshing(true);
     try {
       if (activeTab === "daily_speed") {
         const todayKey = toUtcDateKey(new Date());
         const data = await pointsService.getDailySpeedLeaderboard(todayKey, 50);
+        if (requestId !== requestIdRef.current) return;
         setDailySpeedEntries(data);
         setEntries([]);
       } else if (activeTab === "infinite_speed") {
         const data = await pointsService.getInfiniteSpeedLeaderboard(50);
+        if (requestId !== requestIdRef.current) return;
         setInfiniteSpeedEntries(data);
         setEntries([]);
       } else {
@@ -170,27 +176,32 @@ export default function LeaderboardPage() {
           : userId
             ? await pointsService.getFriendsLeaderboard(userId, 50)
             : [];
+        if (requestId !== requestIdRef.current) return;
         setEntries(data);
       }
 
       if (userId) {
         const rank = await pointsService.getUserRank(userId);
+        if (requestId !== requestIdRef.current) return;
         setUserRank(rank);
       }
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, []);
 
   useEffect(() => {
     if (authLoading) return;
-    fetchLeaderboard(tab, user?.id);
+    fetchLeaderboard(tab, user?.id, true);
   }, [tab, user?.id, authLoading, fetchLeaderboard]);
 
   useEffect(() => {
     if (authLoading || !user?.id) return;
     const interval = setInterval(() => {
-      fetchLeaderboard(tab, user.id);
+      fetchLeaderboard(tab, user.id, false);
     }, 30_000);
     return () => clearInterval(interval);
   }, [tab, user?.id, authLoading, fetchLeaderboard]);
@@ -228,6 +239,9 @@ export default function LeaderboardPage() {
       }
     >
       <div className="pt-2">
+        {refreshing && !loading && (
+          <div className="mb-3 text-xs text-zinc-500 font-body">Refreshing rankings...</div>
+        )}
         {loading || authLoading ? (
           <div className="flex items-center justify-center h-64 text-zinc-500 text-sm font-body">
             Loading rankings...

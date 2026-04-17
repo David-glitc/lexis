@@ -303,8 +303,11 @@ export default function FriendsPage() {
   const [dataLoading, setDataLoading] = useState(false);
   const [onlineMap, setOnlineMap] = useState<Record<string, boolean>>({});
   const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [initialized, setInitialized] = useState(false);
+  const loadSeqRef = useRef(0);
 
   const loadData = useCallback(async (userId: string) => {
+    const loadSeq = ++loadSeqRef.current;
     setDataLoading(true);
     try {
       const [friendsList, requestsList, challengesList] = await Promise.all([
@@ -312,11 +315,15 @@ export default function FriendsPage() {
         friendsService.getPendingRequests(userId),
         friendsService.getChallenges(userId)
       ]);
+      if (loadSeq !== loadSeqRef.current) return;
       setFriends(friendsList);
       setRequests(requestsList);
       setChallenges(challengesList);
     } finally {
-      setDataLoading(false);
+      if (loadSeq === loadSeqRef.current) {
+        setDataLoading(false);
+        setInitialized(true);
+      }
     }
   }, []);
 
@@ -396,7 +403,7 @@ export default function FriendsPage() {
     if (!error) loadData(user.id);
   }
 
-  if (authLoading || dataLoading) {
+  if (authLoading || (!initialized && dataLoading)) {
     return (
       <AppShell>
         <div className="flex items-center justify-center h-64 text-zinc-500 text-sm">Loading...</div>
@@ -458,6 +465,9 @@ export default function FriendsPage() {
       }
     >
       <div className="pt-2 relative">
+        {dataLoading && initialized && (
+          <div className="mb-3 text-xs text-zinc-500 font-body">Refreshing friends...</div>
+        )}
         {message && (
           <div className="absolute top-0 left-1/2 -translate-x-1/2 z-40 bg-white text-black text-sm font-bold px-4 py-2 rounded-lg shadow-lg animate-bounce">
             {message}

@@ -458,8 +458,10 @@ export default function PlayPage() {
     const challengeId = searchParams.get("challenge");
     if (!challengeId) return;
     if (!user) return;
+    let active = true;
 
     friendsService.getChallengeById(challengeId).then((challenge) => {
+      if (!active) return;
       if (!challenge) return;
       setMode("challenge");
       const seededPuzzle: MockPuzzle = {
@@ -473,17 +475,22 @@ export default function PlayPage() {
       puzzleStarted.current = false;
       setPuzzle(seededPuzzle);
     }).catch(() => {});
+    return () => {
+      active = false;
+    };
   }, [searchParams, user]);
 
   useEffect(() => {
     if (!user) return;
     if (dailyStateLoaded.current) return;
+    let active = true;
     dailyStateLoaded.current = true;
     const dateKey = formatDateKey(new Date());
     Promise.all([
       puzzleService.getDailyState(user.id, dateKey),
       puzzleService.getDailyHistory(user.id),
     ]).then(([saved, history]) => {
+      if (!active) return;
       setDailyHistory(history);
       if (saved && saved.guesses.length > 0) {
         const base = createDailyPuzzle();
@@ -491,16 +498,24 @@ export default function PlayPage() {
         setPuzzle({ ...base, rows, attempts: saved.attempts, status: saved.status as MockPuzzle["status"] });
       }
     }).catch(() => {});
+    return () => {
+      active = false;
+    };
   }, [user]);
 
   useEffect(() => {
     if (!user) return;
+    let active = true;
     preferencesService.get(user.id).then((prefs) => {
+      if (!active) return;
       setSfxEnabled(prefs.sfx_enabled);
       setSfxVolume(prefs.sfx_volume);
       soundService.setEnabled(prefs.sfx_enabled);
       soundService.setVolume(prefs.sfx_volume);
     }).catch(() => {});
+    return () => {
+      active = false;
+    };
   }, [user]);
 
   useEffect(() => {

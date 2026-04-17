@@ -516,3 +516,8 @@
 - Hardened friends/profile async loading paths with cleanup guards and safer toast timer management.
 - Added cron broadcast exception/status diagnostics so cron failures now return explicit reasons instead of silent instability.
 
+### 2026-03-17 00:12 - UX Smoothing Hardening
+- Leaderboard now uses stale-request guards and non-blocking refresh states to avoid full-screen flicker on tab switches and polling updates.
+- Friends page now differentiates initial loading vs background refresh to keep visible data stable while reloading.
+- Play and Settings async effects now include cancellation guards to prevent stale state writes during rapid navigation.
+

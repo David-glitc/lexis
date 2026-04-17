@@ -80,11 +80,13 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (!user) { setProfileLoading(false); return; }
+    let active = true;
     setProfileLoading(true);
     Promise.all([
       profileService.getProfile(user.id),
       prefsService.get(user.id),
     ]).then(([p, userPrefs]) => {
+      if (!active) return;
       if (p) {
         setProfile(p);
         setDisplayName(p.display_name || "");
@@ -95,10 +97,16 @@ export default function SettingsPage() {
       setPrefs(userPrefs);
       setDirty(false);
       setProfileLoading(false);
-    }).catch(() => setProfileLoading(false));
+    }).catch(() => {
+      if (!active) return;
+      setProfileLoading(false);
+    });
     if (NotificationService.isSupported()) {
       setNotifPermission(NotificationService.getPermission());
     }
+    return () => {
+      active = false;
+    };
   }, [user]);
 
   useEffect(() => {
