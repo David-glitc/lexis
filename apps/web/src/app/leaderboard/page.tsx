@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useAuth } from "../../providers/AuthProvider";
 import { AppShell } from "../../components/layout/app-shell";
@@ -151,7 +151,7 @@ export default function LeaderboardPage() {
   const [userRank, setUserRank] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
-  async function fetchLeaderboard(activeTab: Tab, userId: string | undefined) {
+  const fetchLeaderboard = useCallback(async (activeTab: Tab, userId: string | undefined) => {
     setLoading(true);
     try {
       if (activeTab === "daily_speed") {
@@ -180,12 +180,12 @@ export default function LeaderboardPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
     if (authLoading) return;
     fetchLeaderboard(tab, user?.id);
-  }, [tab, user?.id, authLoading]);
+  }, [tab, user?.id, authLoading, fetchLeaderboard]);
 
   useEffect(() => {
     if (authLoading || !user?.id) return;
@@ -193,7 +193,7 @@ export default function LeaderboardPage() {
       fetchLeaderboard(tab, user.id);
     }, 30_000);
     return () => clearInterval(interval);
-  }, [tab, user?.id, authLoading]);
+  }, [tab, user?.id, authLoading, fetchLeaderboard]);
 
   const currentUserEntry = user ? entries.find((e) => e.id === user.id) : null;
 

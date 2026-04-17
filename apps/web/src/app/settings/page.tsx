@@ -111,14 +111,23 @@ export default function SettingsPage() {
       return;
     }
     setCheckingUsername(true);
+    let active = true;
     const timer = setTimeout(() => {
-      profileService.isUsernameAvailable(username.toLowerCase()).then((available) => {
+      profileService.isUsernameAvailable(username.toLowerCase(), user?.id).then((available) => {
+        if (!active) return;
         setUsernameAvailable(available);
+        setCheckingUsername(false);
+      }).catch(() => {
+        if (!active) return;
+        setUsernameAvailable(null);
         setCheckingUsername(false);
       });
     }, 500);
-    return () => clearTimeout(timer);
-  }, [username, profile?.username]);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [username, profile?.username, user?.id]);
 
   function togglePref(key: keyof UserPreferences, value: UserPreferences[keyof UserPreferences]) {
     if (!user) return;

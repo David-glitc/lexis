@@ -253,33 +253,41 @@ async function sendPushToUser(userId: string, payload: { title: string; body: st
 }
 
 async function runDailyBroadcast(): Promise<{ ok: boolean; users_notified: number; reason?: string }> {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    return { ok: false, users_notified: 0, reason: "Supabase service key not configured" };
-  }
-
-  const profilesResponse = await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=id,preferences`, {
-    headers: {
-      apikey: SUPABASE_SERVICE_ROLE_KEY,
-      authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-    },
-  });
-  if (!profilesResponse.ok) {
-    return { ok: false, users_notified: 0, reason: "Could not fetch profiles" };
-  }
-  const profiles = (await profilesResponse.json()) as Array<{ id: string; preferences?: Record<string, unknown> }>;
-
-  let notified = 0;
-  for (const profile of profiles) {
-    if (profile.preferences?.notify_daily === true) {
-      await sendPushToUser(profile.id, {
-        title: "Lexis Daily Puzzle",
-        body: "Today's puzzle is live. Keep your streak alive.",
-        url: "/play",
-      });
-      notified += 1;
+  try {
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      return { ok: false, users_notified: 0, reason: "Supabase service key not configured" };
     }
+
+    const profilesResponse = await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=id,preferences`, {
+      headers: {
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      },
+    });
+    if (!profilesResponse.ok) {
+      return {
+        ok: false,
+        users_notified: 0,
+        reason: `Could not fetch profiles (${profilesResponse.status})`,
+      };
+    }
+    const profiles = (await profilesResponse.json()) as Array<{ id: string; preferences?: Record<string, unknown> }>;
+
+    let notified = 0;
+    for (const profile of profiles) {
+      if (profile.preferences?.notify_daily === true) {
+        await sendPushToUser(profile.id, {
+          title: "Lexis Daily Puzzle",
+          body: "Today's puzzle is live. Keep your streak alive.",
+          url: "/play",
+        });
+        notified += 1;
+      }
+    }
+    return { ok: true, users_notified: notified };
+  } catch (error) {
+    return { ok: false, users_notified: 0, reason: `Broadcast exception: ${String(error)}` };
   }
-  return { ok: true, users_notified: notified };
 }
 
 async function handleCreateSession(req: Request): Promise<Response> {

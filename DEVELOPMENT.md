@@ -509,3 +509,10 @@
 - Refactored daily notification logic into reusable `runDailyBroadcast()` and reused it for both HTTP endpoint and scheduled execution.
 - Registered production cron using `Deno.cron("lexis-daily-push", "0 7 * * *", ...)` so daily reminders run automatically on Deno Deploy.
 
+### 2026-03-16 23:58 - Stability Hardening Pass
+- Fixed auth provider subscription lifecycle to prevent repeated re-subscriptions that caused page-level state resets and flicker.
+- Refactored profile writes to safe update-or-insert flow so partial profile saves no longer risk wiping fields (points, username, stats).
+- Hardened settings username availability checks and async cleanup to avoid stale validation glitches.
+- Hardened friends/profile async loading paths with cleanup guards and safer toast timer management.
+- Added cron broadcast exception/status diagnostics so cron failures now return explicit reasons instead of silent instability.
+

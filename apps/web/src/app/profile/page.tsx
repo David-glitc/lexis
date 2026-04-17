@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { createClient } from "../../utils/supabase/client";
 import { useAuth } from "../../providers/AuthProvider";
@@ -119,6 +119,31 @@ export default function ProfilePage() {
   const [localStats, setLocalStats] = useState({ played: 0, won: 0, winRate: 0, streak: 0, maxStreak: 0, averageAttempts: 0 });
   const [history, setHistory] = useState<PuzzleResult[]>([]);
 
+  const loadProfileData = useCallback(async (activeUserId: string, activeUserEmail: string | null | undefined) => {
+    const [profileResult, stats, historyResult] = await Promise.all([
+      profileService.getProfile(activeUserId).then(async (existingProfile) => {
+        if (existingProfile) return existingProfile;
+        return profileService.createProfile(
+          activeUserId,
+          activeUserEmail ?? "",
+          activeUserEmail?.split("@")[0] ?? "Player"
+        );
+      }),
+      puzzleService.getStats(activeUserId).catch(() => ({
+        played: 0,
+        won: 0,
+        winRate: 0,
+        streak: 0,
+        maxStreak: 0,
+        averageAttempts: 0,
+      })),
+      puzzleService.getHistory(activeUserId).catch(() => [] as PuzzleResult[]),
+    ]);
+
+    const points = await pointsService.getPoints(activeUserId);
+    return { profileResult, stats, historyResult, points };
+  }, []);
+
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
@@ -126,32 +151,30 @@ export default function ProfilePage() {
       return;
     }
 
-    async function load() {
-      const [p_result, stats, hist] = await Promise.all([
-        profileService.getProfile(user!.id).then(async (p) => {
-          if (p) return p;
-          return profileService.createProfile(user!.id, user!.email ?? "", user!.email?.split("@")[0] ?? "Player");
-        }),
-        puzzleService.getStats(user!.id).catch(() => ({ played: 0, won: 0, winRate: 0, streak: 0, maxStreak: 0, averageAttempts: 0 })),
-        puzzleService.getHistory(user!.id).catch(() => [] as PuzzleResult[]),
-      ]);
-      const p = p_result;
-      setLocalStats(stats);
-      setHistory(hist);
-      if (p) {
-        setProfile(p);
-        setDisplayName(p.display_name);
-        setUsername(p.username ?? "");
-        setBio(p.bio);
-      }
+    let active = true;
+    setLoading(true);
 
-      const points = await pointsService.getPoints(user!.id);
-      setLp(points);
+    loadProfileData(user.id, user.email)
+      .then(({ profileResult, stats, historyResult, points }) => {
+        if (!active) return;
+        setLocalStats(stats);
+        setHistory(historyResult);
+        setLp(points);
+        if (profileResult) {
+          setProfile(profileResult);
+          setDisplayName(profileResult.display_name);
+          setUsername(profileResult.username ?? "");
+          setBio(profileResult.bio);
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
 
-      setLoading(false);
-    }
-    load();
-  }, [authLoading, user]);
+    return () => {
+      active = false;
+    };
+  }, [authLoading, user, loadProfileData]);
 
   async function handleSaveProfile() {
     if (!user) return;

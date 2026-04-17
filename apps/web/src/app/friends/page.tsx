@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { createClient } from "../../utils/supabase/client";
 import { ProfileService, type UserProfile } from "../../services/ProfileService";
@@ -302,18 +302,22 @@ export default function FriendsPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [dataLoading, setDataLoading] = useState(false);
   const [onlineMap, setOnlineMap] = useState<Record<string, boolean>>({});
+  const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadData = useCallback(async (userId: string) => {
     setDataLoading(true);
-    const [friendsList, requestsList, challengesList] = await Promise.all([
-      friendsService.getFriendsList(userId),
-      friendsService.getPendingRequests(userId),
-      friendsService.getChallenges(userId)
-    ]);
-    setFriends(friendsList);
-    setRequests(requestsList);
-    setChallenges(challengesList);
-    setDataLoading(false);
+    try {
+      const [friendsList, requestsList, challengesList] = await Promise.all([
+        friendsService.getFriendsList(userId),
+        friendsService.getPendingRequests(userId),
+        friendsService.getChallenges(userId)
+      ]);
+      setFriends(friendsList);
+      setRequests(requestsList);
+      setChallenges(challengesList);
+    } finally {
+      setDataLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -335,9 +339,20 @@ export default function FriendsPage() {
     if (user) loadData(user.id);
   }, [user, loadData]);
 
+  useEffect(() => {
+    return () => {
+      if (flashTimeoutRef.current) {
+        clearTimeout(flashTimeoutRef.current);
+      }
+    };
+  }, []);
+
   function flash(msg: string) {
+    if (flashTimeoutRef.current) {
+      clearTimeout(flashTimeoutRef.current);
+    }
     setMessage(msg);
-    setTimeout(() => setMessage(null), 3000);
+    flashTimeoutRef.current = setTimeout(() => setMessage(null), 3000);
   }
 
   async function handleSendRequest(targetId: string) {

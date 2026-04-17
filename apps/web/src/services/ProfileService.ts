@@ -84,19 +84,55 @@ export class ProfileService {
   async upsertProfile(profile: Partial<UserProfile> & { id: string }): Promise<UserProfile | null> {
     try {
       const now = new Date().toISOString();
-      const payload = {
+      const payload: Partial<UserProfile> & { id: string; updated_at: string } = {
         ...profile,
         updated_at: now,
         ranking_tier: profile.puzzles_won !== undefined
           ? ProfileService.computeTier(profile.puzzles_won)
           : profile.ranking_tier
       };
+      const existing = await this.getProfile(profile.id);
+      let data: unknown = null;
+      let error: { message?: string } | null = null;
 
-      const { data, error } = await this.client
-        .from(this.tableName)
-        .upsert(payload, { onConflict: "id" })
-        .select()
-        .single();
+      if (existing) {
+        const updateResult = await this.client
+          .from(this.tableName)
+          .update(payload)
+          .eq("id", profile.id)
+          .select()
+          .single();
+        data = updateResult.data;
+        error = updateResult.error;
+      } else {
+        const insertPayload: UserProfile = {
+          id: profile.id,
+          email: profile.email ?? "",
+          username: profile.username ?? null,
+          display_name: profile.display_name ?? "Player",
+          avatar_url: profile.avatar_url ?? null,
+          bio: profile.bio ?? "",
+          ranking_tier: (payload.ranking_tier as RankingTier | undefined) ?? "unranked",
+          total_points: profile.total_points ?? 0,
+          puzzles_played: profile.puzzles_played ?? 0,
+          puzzles_won: profile.puzzles_won ?? 0,
+          win_rate: profile.win_rate ?? 0,
+          current_streak: profile.current_streak ?? 0,
+          max_streak: profile.max_streak ?? 0,
+          average_attempts: profile.average_attempts ?? 0,
+          total_time_ms: profile.total_time_ms ?? 0,
+          fastest_solve_ms: profile.fastest_solve_ms ?? 0,
+          created_at: profile.created_at ?? now,
+          updated_at: now,
+        };
+        const insertResult = await this.client
+          .from(this.tableName)
+          .insert(insertPayload)
+          .select()
+          .single();
+        data = insertResult.data;
+        error = insertResult.error;
+      }
 
       if (error || !data) return null;
       return data as UserProfile;
@@ -196,7 +232,7 @@ export class ProfileService {
         return { error: "Username must be 3-20 characters, alphanumeric and underscores only" };
       }
 
-      const taken = !(await this.isUsernameAvailable(normalized));
+      const taken = !(await this.isUsernameAvailable(normalized, userId));
       if (taken) {
         return { error: "Username is already taken" };
       }
@@ -223,13 +259,17 @@ export class ProfileService {
     return data as UserProfile;
   }
 
-  async isUsernameAvailable(username: string): Promise<boolean> {
+  async isUsernameAvailable(username: string, excludeUserId?: string): Promise<boolean> {
     try {
-      const { data } = await this.client
+      let query = this.client
         .from(this.tableName)
         .select("id")
         .eq("username", username.toLowerCase())
         .limit(1);
+      if (excludeUserId) {
+        query = query.neq("id", excludeUserId);
+      }
+      const { data } = await query;
 
       return !data || data.length === 0;
     } catch {
