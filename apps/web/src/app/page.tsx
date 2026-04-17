@@ -30,12 +30,20 @@ function useReveal() {
 function useParallax() {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reducedMotion) return;
+    let ticking = false;
     function handleScroll() {
       if (!ref.current) return;
-      const y = window.scrollY;
-      ref.current.querySelectorAll<HTMLElement>("[data-speed]").forEach((el) => {
-        const speed = parseFloat(el.dataset.speed ?? "0.1");
-        el.style.transform = `translateY(${y * speed}px)`;
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        const y = window.scrollY;
+        ref.current?.querySelectorAll<HTMLElement>("[data-speed]").forEach((el) => {
+          const speed = parseFloat(el.dataset.speed ?? "0.1");
+          el.style.transform = `translate3d(0, ${y * speed}px, 0)`;
+        });
+        ticking = false;
       });
     }
     window.addEventListener("scroll", handleScroll, { passive: true });

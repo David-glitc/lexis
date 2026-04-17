@@ -58,6 +58,8 @@ const SOLUTION_WORDS = [
 ];
 
 class Logger {
+  private verbose = (Deno.env.get("LOG_VERBOSE") ?? "0") === "1";
+
   private json(level: string, message: string, data?: Record<string, unknown>) {
     const entry: Record<string, unknown> = {
       timestamp: new Date().toISOString(),
@@ -70,6 +72,10 @@ class Logger {
 
   info(message: string, data?: Record<string, unknown>) {
     this.json("info", message, data);
+  }
+  debug(message: string, data?: Record<string, unknown>) {
+    if (!this.verbose) return;
+    this.json("debug", message, data);
   }
   error(message: string, data?: Record<string, unknown>) {
     this.json("error", message, data);
@@ -305,6 +311,14 @@ async function handleCreateSession(req: Request): Promise<Response> {
   const challengeId = typeof raw?.challengeId === "string" ? raw.challengeId : undefined;
   const seed = await deriveSeed(mode, resolvedDateKey, challengeId);
   const puzzleId = `${mode}-${resolvedDateKey}-${seed.slice(0, 8)}`;
+  logger.debug("Create session request", {
+    user_id: auth.userId,
+    mode,
+    date_key: dateKey,
+    resolved_date_key: resolvedDateKey,
+    challenge_id: challengeId ?? null,
+    puzzle_id: puzzleId,
+  });
   const signature = await signValue(`${auth.userId}:${puzzleId}:${seed}`);
   const session: PuzzleSession = {
     id: crypto.randomUUID(),
@@ -338,6 +352,11 @@ async function handlePostGuess(req: Request): Promise<Response> {
   const sessionId = String(body?.sessionId ?? "");
   const guess = String(body?.guess ?? "").toLowerCase().trim();
   if (!sessionId || guess.length !== 5 || !/^[a-z]{5}$/.test(guess)) return errorResponse("Invalid guess payload", 400);
+  logger.debug("Guess submission received", {
+    user_id: auth.userId,
+    session_id: sessionId,
+    guess_length: guess.length,
+  });
   const sessionEntry = await kv.get<PuzzleSession>([...SESSION_KEY_PREFIX, sessionId]);
   const session = sessionEntry.value;
   if (!session) return errorResponse("Session not found", 404);
@@ -353,6 +372,12 @@ async function handlePostGuess(req: Request): Promise<Response> {
   session.status = isWin ? "won" : attempts >= session.maxAttempts ? "lost" : "playing";
   if (session.status !== "playing") session.completedAt = Date.now();
   await kv.set([...SESSION_KEY_PREFIX, session.id], session);
+  logger.debug("Guess evaluated", {
+    user_id: auth.userId,
+    session_id: session.id,
+    status: session.status,
+    attempts,
+  });
   return jsonResponse({ sessionId: session.id, puzzleId: session.puzzleId, letters, status: session.status, attempts, isWin: session.status === "won" });
 }
 
@@ -363,6 +388,7 @@ async function handleFinalize(req: Request): Promise<Response> {
   const body = await req.json();
   const sessionId = String(body?.sessionId ?? "");
   const signature = String(body?.signature ?? "");
+  logger.debug("Finalize requested", { user_id: auth.userId, session_id: sessionId, has_signature: signature.length > 0 });
   const entry = await kv.get<PuzzleSession>([...SESSION_KEY_PREFIX, sessionId]);
   const session = entry.value;
   if (!session) return errorResponse("Session not found", 404);
@@ -377,6 +403,15 @@ async function handleFinalize(req: Request): Promise<Response> {
   const score = computeScore({ attempts: session.guesses.length, elapsedMs, won: session.status === "won", streakBonus: Number(body?.streakBonus ?? 0), difficultyMultiplier: Number(body?.difficultyMultiplier ?? 1) });
   session.finalized = true;
   await kv.set([...SESSION_KEY_PREFIX, session.id], session);
+  logger.debug("Finalize completed", {
+    user_id: auth.userId,
+    session_id: session.id,
+    mode: session.mode,
+    status: session.status,
+    elapsed_ms: elapsedMs,
+    attempts: session.guesses.length,
+    score,
+  });
   return jsonResponse({ sessionId: session.id, mode: session.mode, status: session.status, attempts: session.guesses.length, elapsedMs, score, ratingDelta: session.mode === "challenge" || session.mode === "speed" ? (session.status === "won" ? 16 : -8) : 0, tierHint: computeTier(1200 + (session.status === "won" ? 16 : -8)) });
 }
 
@@ -387,6 +422,11 @@ async function handleCreateChallenge(req: Request): Promise<Response> {
   const body = await req.json();
   const opponentId = String(body?.opponentId ?? "");
   if (!opponentId) return errorResponse("opponentId is required", 400);
+  logger.debug("Create challenge request", {
+    user_id: auth.userId,
+    opponent_id: opponentId,
+    has_time_limit: typeof body?.timeLimitSeconds === "number",
+  });
   const challengeId = crypto.randomUUID();
   const dateKey = getUtcDateKey();
   const seed = await deriveSeed("challenge", dateKey, challengeId);
@@ -422,6 +462,11 @@ async function handleSubmitChallenge(req: Request): Promise<Response> {
   const challengeId = String(body?.challengeId ?? "");
   const sessionId = String(body?.sessionId ?? "");
   if (!challengeId || !sessionId) return errorResponse("challengeId and sessionId are required", 400);
+  logger.debug("Challenge submit request", {
+    user_id: auth.userId,
+    challenge_id: challengeId,
+    session_id: sessionId,
+  });
   const challengeEntry = await kv.get<ChallengeRecord>([...CHALLENGE_KEY_PREFIX, challengeId]);
   const challenge = challengeEntry.value;
   if (!challenge) return errorResponse("Challenge not found", 404);
@@ -474,6 +519,12 @@ async function handleSubmitChallenge(req: Request): Promise<Response> {
       }),
     ]);
   }
+  logger.debug("Challenge submit processed", {
+    user_id: auth.userId,
+    challenge_id: challenge.id,
+    status: challenge.status,
+    winner_id: challenge.winnerId,
+  });
   return jsonResponse(challenge);
 }
 
@@ -483,6 +534,7 @@ async function handleDailyPushBroadcast(req: Request): Promise<Response> {
   if (!cronSecret || provided !== cronSecret) return errorResponse("Forbidden", 403);
   const result = await runDailyBroadcast();
   if (!result.ok) return errorResponse(result.reason ?? "Daily broadcast failed", 500);
+  logger.info("Manual daily push broadcast completed", { users_notified: result.users_notified });
   return jsonResponse(result);
 }
 
@@ -502,6 +554,13 @@ async function handler(req: Request): Promise<Response> {
   const { pathname } = new URL(req.url);
   const method = req.method;
   if (method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders() });
+  logger.debug("Request received", {
+    request_id: requestId,
+    method,
+    path: pathname,
+    user_agent: req.headers.get("user-agent") ?? null,
+    ip_hint: req.headers.get("x-forwarded-for") ?? null,
+  });
   let response: Response;
   let isError = false;
   try {

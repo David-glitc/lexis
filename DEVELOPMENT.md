@@ -527,3 +527,15 @@
 - Switched friendship fetch to `maybeSingle()` to avoid spurious exceptions on empty/duplicate matches.
 - Added idempotent puzzle win point awards in Play flow with deterministic keys per user/mode/puzzle.
 
+### 2026-03-17 01:02 - Production Endpoint Smoke + Logging
+- Added `apps/server/prod-smoke.ts` to run production smoke checks against all server endpoints (public + unauthorized guards + optional authorized/cron flows) and emit JSON reports under `apps/server/reports/`.
+- Added `deno task smoke:prod` task for repeatable execution with environment-driven credentials (`PROD_SERVER_URL`, `PROD_TEST_AUTH_TOKEN`, `PROD_TEST_CRON_SECRET`, `PROD_TEST_OPPONENT_ID`).
+- Expanded structured logging in `apps/server/main.ts` with env-gated verbose debug channel (`LOG_VERBOSE=1`) for route intake, session lifecycle, guess/finalize events, challenge lifecycle, and manual push broadcast execution.
+
+### 2026-04-17 12:32 - Aggressive Latency Optimization Pass
+- Replaced render-blocking Google Fonts `<link>` loading with `next/font/google` self-hosted fonts (`display: swap`) in root layout to cut first paint blocking and external DNS/TLS overhead.
+- Switched service worker registration from inline script injection to `next/script` with `afterInteractive` strategy to avoid blocking hydration-critical work.
+- Deferred global non-critical client widgets (`PwaInstallPrompt`, `CookieConsent`, `NotificationPrompt`, `EngagementNotifications`) via dynamic client-only imports to reduce initial JS on first paint routes.
+- Optimized landing page parallax scroll handler with requestAnimationFrame scheduling and `translate3d` transforms plus reduced-motion short-circuiting to reduce main-thread scroll jank.
+- Added aggressive static asset cache headers and compression-oriented Next config settings (`compress`, immutable asset caching, explicit `sw.js` no-cache, image format hints, `poweredByHeader` disabled).
+

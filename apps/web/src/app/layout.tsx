@@ -1,7 +1,30 @@
 import type { ReactNode } from "react";
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
+import { Space_Grotesk, Syne, JetBrains_Mono } from "next/font/google";
 import { Providers } from "../providers/Providers";
 import "../styles/globals.css";
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-body",
+  display: "swap",
+});
+
+const syne = Syne({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-display",
+  display: "swap",
+});
+
+const jetBrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "700"],
+  variable: "--font-mono",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://lexis.app"),
@@ -46,20 +69,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en">
       <head>
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap"
-          rel="stylesheet"
-        />
       </head>
-      <body>
+      <body className={`${spaceGrotesk.variable} ${syne.variable} ${jetBrainsMono.variable}`}>
         <Providers>{children}</Providers>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `if("serviceWorker"in navigator){window.addEventListener("load",()=>{navigator.serviceWorker.register("/sw.js")})}`
-          }}
-        />
+        <Script id="sw-register" strategy="afterInteractive">
+          {`if("serviceWorker" in navigator){window.addEventListener("load",()=>{navigator.serviceWorker.register("/sw.js")})}`}
+        </Script>
       </body>
     </html>
   );
