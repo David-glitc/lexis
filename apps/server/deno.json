@@ -4,7 +4,7 @@
         "start": "deno run --allow-net --allow-env --unstable-kv main.ts",
         "deploy": "deployctl deploy --project=lexis --prod",
         "check": "deno check main.ts",
-        "smoke:prod": "deno run --allow-net --allow-env --allow-write prod-smoke.ts"
+        "smoke:prod": "deno run --env-file=.env --allow-net --allow-env --allow-write prod-smoke.ts"
     },
     "compilerOptions": {
         "lib": [

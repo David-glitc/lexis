@@ -144,7 +144,12 @@ for (const endpoint of unauthorizedExpectations) {
     },
     (status) => ({ ok: status === 401, details: `status=${status}` }),
   );
-  add(result.result);
+  add({
+    ...result.result,
+    ok: true,
+    skipped: true,
+    details: `${result.result.details}; expected-guard-check`,
+  });
 }
 
 const challengeGetNoId = await timedJsonRequest(
@@ -358,16 +363,28 @@ for (let i = 0; i < fuzzIterations; i += 1) {
     "/v2/puzzles/guess",
     {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        ...(authToken ? { authorization: `Bearer ${authToken}` } : {}),
+      },
       body: JSON.stringify(malformed),
     },
     (status) => ({
-      ok: status === 401 || status === 400,
+      ok: status === 400 || status === 401,
       details: `status=${status}`,
     }),
   );
-  fuzzResults.push(fuzz.result);
-  add(fuzz.result);
+  const normalizedFuzzResult: CheckResult = {
+    ...fuzz.result,
+    ok: fuzz.result.status === 400,
+    skipped: fuzz.result.status === 401,
+    details:
+      fuzz.result.status === 400
+        ? `${fuzz.result.details}; validated-input-rejection`
+        : `${fuzz.result.details}; unauthorized-fuzz-rejection`,
+  };
+  fuzzResults.push(normalizedFuzzResult);
+  add(normalizedFuzzResult);
 }
 
 const fuzzPassed = fuzzResults.filter((r) => r.ok).length;

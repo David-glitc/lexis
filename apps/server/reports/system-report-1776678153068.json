@@ -1,0 +1,426 @@
+{
+  "started_at": "2026-04-20T09:42:21.428Z",
+  "finished_at": "2026-04-20T09:42:33.068Z",
+  "target": "https://lexis.deno.dev",
+  "conclusiveness": "full",
+  "env_flags": {
+    "has_auth_token": true,
+    "has_cron_secret": true,
+    "has_opponent_id": true
+  },
+  "totals": {
+    "checks": 43,
+    "passed": 11,
+    "failed": 32,
+    "skipped": 5,
+    "pass_rate_percent": 26
+  },
+  "checks": [
+    {
+      "name": "GET /health",
+      "ok": true,
+      "status": 200,
+      "duration_ms": 2352,
+      "details": "status=200"
+    },
+    {
+      "name": "GET /metrics (before)",
+      "ok": true,
+      "status": 200,
+      "duration_ms": 140,
+      "details": "status=200"
+    },
+    {
+      "name": "POST /v2/puzzles/session unauthorized",
+      "ok": true,
+      "status": 401,
+      "duration_ms": 465,
+      "details": "status=401; expected-guard-check",
+      "skipped": true
+    },
+    {
+      "name": "POST /v2/puzzles/guess unauthorized",
+      "ok": true,
+      "status": 401,
+      "duration_ms": 296,
+      "details": "status=401; expected-guard-check",
+      "skipped": true
+    },
+    {
+      "name": "POST /v2/puzzles/finalize unauthorized",
+      "ok": true,
+      "status": 401,
+      "duration_ms": 168,
+      "details": "status=401; expected-guard-check",
+      "skipped": true
+    },
+    {
+      "name": "POST /v2/challenges/create unauthorized",
+      "ok": true,
+      "status": 401,
+      "duration_ms": 165,
+      "details": "status=401; expected-guard-check",
+      "skipped": true
+    },
+    {
+      "name": "POST /v2/challenges/submit unauthorized",
+      "ok": true,
+      "status": 401,
+      "duration_ms": 153,
+      "details": "status=401; expected-guard-check",
+      "skipped": true
+    },
+    {
+      "name": "GET /v2/challenges/get without id",
+      "ok": true,
+      "status": 400,
+      "duration_ms": 161,
+      "details": "status=400"
+    },
+    {
+      "name": "GET unknown route",
+      "ok": true,
+      "status": 404,
+      "duration_ms": 158,
+      "details": "status=404"
+    },
+    {
+      "name": "POST /v2/notifications/daily-broadcast with cron secret",
+      "ok": true,
+      "status": 200,
+      "duration_ms": 1002,
+      "details": "status=200"
+    },
+    {
+      "name": "POST /v2/puzzles/session authorized",
+      "ok": false,
+      "status": 500,
+      "duration_ms": 182,
+      "details": "status=500"
+    },
+    {
+      "name": "POST /v2/challenges/create authorized",
+      "ok": false,
+      "status": 500,
+      "duration_ms": 182,
+      "details": "status=500"
+    },
+    {
+      "name": "FUZZ /v2/puzzles/guess malformed #1",
+      "ok": false,
+      "status": 500,
+      "duration_ms": 171,
+      "details": "status=500; unauthorized-fuzz-rejection",
+      "skipped": false
+    },
+    {
+      "name": "FUZZ /v2/puzzles/guess malformed #2",
+      "ok": false,
+      "status": 500,
+      "duration_ms": 167,
+      "details": "status=500; unauthorized-fuzz-rejection",
+      "skipped": false
+    },
+    {
+      "name": "FUZZ /v2/puzzles/guess malformed #3",
+      "ok": false,
+      "status": 500,
+      "duration_ms": 167,
+      "details": "status=500; unauthorized-fuzz-rejection",
+      "skipped": false
+    },
+    {
+      "name": "FUZZ /v2/puzzles/guess malformed #4",
+      "ok": false,
+      "status": 500,
+      "duration_ms": 160,
+      "details": "status=500; unauthorized-fuzz-rejection",
+      "skipped": false
+    },
+    {
+      "name": "FUZZ /v2/puzzles/guess malformed #5",
+      "ok": false,
+      "status": 500,
+      "duration_ms": 153,
+      "details": "status=500; unauthorized-fuzz-rejection",
+      "skipped": false
+    },
+    {
+      "name": "FUZZ /v2/puzzles/guess malformed #6",
+      "ok": false,
+      "status": 500,
+      "duration_ms": 169,
+      "details": "status=500; unauthorized-fuzz-rejection",
+      "skipped": false
+    },
+    {
+      "name": "FUZZ /v2/puzzles/guess malformed #7",
+      "ok": false,
+      "status": 500,
+      "duration_ms": 184,
+      "details": "status=500; unauthorized-fuzz-rejection",
+      "skipped": false
+    },
+    {
+      "name": "FUZZ /v2/puzzles/guess malformed #8",
+      "ok": false,
+      "status": 500,
+      "duration_ms": 159,
+      "details": "status=500; unauthorized-fuzz-rejection",
+      "skipped": false
+    },
+    {
+      "name": "FUZZ /v2/puzzles/guess malformed #9",
+      "ok": false,
+      "status": 500,
+      "duration_ms": 150,
+      "details": "status=500; unauthorized-fuzz-rejection",
+      "skipped": false
+    },
+    {
+      "name": "FUZZ /v2/puzzles/guess malformed #10",
+      "ok": false,
+      "status": 500,
+      "duration_ms": 181,
+      "details": "status=500; unauthorized-fuzz-rejection",
+      "skipped": false
+    },
+    {
+      "name": "FUZZ /v2/puzzles/guess malformed #11",
+      "ok": false,
+      "status": 500,
+      "duration_ms": 393,
+      "details": "status=500; unauthorized-fuzz-rejection",
+      "skipped": false
+    },
+    {
+      "name": "FUZZ /v2/puzzles/guess malformed #12",
+      "ok": false,
+      "status": 500,
+      "duration_ms": 204,
+      "details": "status=500; unauthorized-fuzz-rejection",
+      "skipped": false
+    },
+    {
+      "name": "FUZZ /v2/puzzles/guess malformed #13",
+      "ok": false,
+      "status": 500,
+      "duration_ms": 167,
+      "details": "status=500; unauthorized-fuzz-rejection",
+      "skipped": false
+    },
+    {
+      "name": "FUZZ /v2/puzzles/guess malformed #14",
+      "ok": false,
+      "status": 500,
+      "duration_ms": 185,
+      "details": "status=500; unauthorized-fuzz-rejection",
+      "skipped": false
+    },
+    {
+      "name": "FUZZ /v2/puzzles/guess malformed #15",
+      "ok": false,
+      "status": 500,
+      "duration_ms": 471,
+      "details": "status=500; unauthorized-fuzz-rejection",
+      "skipped": false
+    },
+    {
+      "name": "FUZZ /v2/puzzles/guess malformed #16",
+      "ok": false,
+      "status": 500,
+      "duration_ms": 169,
+      "details": "status=500; unauthorized-fuzz-rejection",
+      "skipped": false
+    },
+    {
+      "name": "FUZZ /v2/puzzles/guess malformed #17",
+      "ok": false,
+      "status": 500,
+      "duration_ms": 183,
+      "details": "status=500; unauthorized-fuzz-rejection",
+      "skipped": false
+    },
+    {
+      "name": "FUZZ /v2/puzzles/guess malformed #18",
+      "ok": false,
+      "status": 500,
+      "duration_ms": 160,
+      "details": "status=500; unauthorized-fuzz-rejection",
+      "skipped": false
+    },
+    {
+      "name": "FUZZ /v2/puzzles/guess malformed #19",
+      "ok": false,
+      "status": 500,
+      "duration_ms": 174,
+      "details": "status=500; unauthorized-fuzz-rejection",
+      "skipped": false
+    },
+    {
+      "name": "FUZZ /v2/puzzles/guess malformed #20",
+      "ok": false,
+      "status": 500,
+      "duration_ms": 160,
+      "details": "status=500; unauthorized-fuzz-rejection",
+      "skipped": false
+    },
+    {
+      "name": "FUZZ /v2/puzzles/guess malformed #21",
+      "ok": false,
+      "status": 500,
+      "duration_ms": 165,
+      "details": "status=500; unauthorized-fuzz-rejection",
+      "skipped": false
+    },
+    {
+      "name": "FUZZ /v2/puzzles/guess malformed #22",
+      "ok": false,
+      "status": 500,
+      "duration_ms": 166,
+      "details": "status=500; unauthorized-fuzz-rejection",
+      "skipped": false
+    },
+    {
+      "name": "FUZZ /v2/puzzles/guess malformed #23",
+      "ok": false,
+      "status": 500,
+      "duration_ms": 169,
+      "details": "status=500; unauthorized-fuzz-rejection",
+      "skipped": false
+    },
+    {
+      "name": "FUZZ /v2/puzzles/guess malformed #24",
+      "ok": false,
+      "status": 500,
+      "duration_ms": 185,
+      "details": "status=500; unauthorized-fuzz-rejection",
+      "skipped": false
+    },
+    {
+      "name": "FUZZ /v2/puzzles/guess malformed #25",
+      "ok": false,
+      "status": 500,
+      "duration_ms": 170,
+      "details": "status=500; unauthorized-fuzz-rejection",
+      "skipped": false
+    },
+    {
+      "name": "FUZZ /v2/puzzles/guess malformed #26",
+      "ok": false,
+      "status": 500,
+      "duration_ms": 158,
+      "details": "status=500; unauthorized-fuzz-rejection",
+      "skipped": false
+    },
+    {
+      "name": "FUZZ /v2/puzzles/guess malformed #27",
+      "ok": false,
+      "status": 500,
+      "duration_ms": 196,
+      "details": "status=500; unauthorized-fuzz-rejection",
+      "skipped": false
+    },
+    {
+      "name": "FUZZ /v2/puzzles/guess malformed #28",
+      "ok": false,
+      "status": 500,
+      "duration_ms": 164,
+      "details": "status=500; unauthorized-fuzz-rejection",
+      "skipped": false
+    },
+    {
+      "name": "FUZZ /v2/puzzles/guess malformed #29",
+      "ok": false,
+      "status": 500,
+      "duration_ms": 211,
+      "details": "status=500; unauthorized-fuzz-rejection",
+      "skipped": false
+    },
+    {
+      "name": "FUZZ /v2/puzzles/guess malformed #30",
+      "ok": false,
+      "status": 500,
+      "duration_ms": 531,
+      "details": "status=500; unauthorized-fuzz-rejection",
+      "skipped": false
+    },
+    {
+      "name": "GET /metrics (after)",
+      "ok": true,
+      "status": 200,
+      "duration_ms": 142,
+      "details": "status=200"
+    }
+  ],
+  "evidence": {
+    "db_connectivity": "up",
+    "data_retrieval": {
+      "session_created": false,
+      "challenge_fetched": false
+    },
+    "fuzz": {
+      "total": 30,
+      "passed": 0,
+      "failed": 30
+    }
+  },
+  "metrics_before": {
+    "total_requests": 1,
+    "total_errors": 0,
+    "rate_limited": 0,
+    "anti_cheat_events": 0,
+    "push_sent": 0,
+    "push_failed": 0,
+    "uptime_ms": 168,
+    "routes": {
+      "/health": {
+        "count": 1,
+        "avg_duration_ms": 2
+      }
+    }
+  },
+  "metrics_after": {
+    "total_requests": 39,
+    "total_errors": 32,
+    "rate_limited": 0,
+    "anti_cheat_events": 0,
+    "push_sent": 0,
+    "push_failed": 0,
+    "uptime_ms": 8385,
+    "routes": {
+      "/v2/puzzles/guess": {
+        "count": 31,
+        "avg_duration_ms": 14
+      },
+      "/v2/puzzles/finalize": {
+        "count": 1,
+        "avg_duration_ms": 0
+      },
+      "/v2/challenges/create": {
+        "count": 2,
+        "avg_duration_ms": 7
+      },
+      "/v2/challenges/submit": {
+        "count": 1,
+        "avg_duration_ms": 0
+      },
+      "/v2/challenges/get": {
+        "count": 1,
+        "avg_duration_ms": 0
+      },
+      "/this-route-should-not-exist": {
+        "count": 1,
+        "avg_duration_ms": 0
+      },
+      "/v2/notifications/daily-broadcast": {
+        "count": 1,
+        "avg_duration_ms": 846
+      },
+      "/v2/puzzles/session": {
+        "count": 1,
+        "avg_duration_ms": 18
+      }
+    }
+  }
+}
