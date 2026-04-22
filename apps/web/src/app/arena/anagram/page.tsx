@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AppShell } from "../../../../components/layout/app-shell";
-import { Button } from "../../../../components/ui/button";
-import { completeRound, createAnagramRound, getRoundSecondsRemaining, submitAnagramWord } from "../../../../features/anagram/engine";
-import type { AnagramRoundState } from "../../../../features/anagram/types";
+import { AppShell } from "../../../components/layout/app-shell";
+import { Button } from "../../../components/ui/button";
+import { completeRound, createAnagramRound, getRoundSecondsRemaining, submitAnagramWord } from "../../../features/anagram/engine";
+import type { AnagramRoundState } from "../../../features/anagram/types";
 
 const RACKS = ["stream", "planet", "rescue", "stared", "friend", "bakers", "silent"];
 
