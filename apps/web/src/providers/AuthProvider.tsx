@@ -23,9 +23,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const heartbeatUserIdRef = useRef<string | null>(null);
+  const userRef = useRef<User | null>(null);
 
   const refreshUser = async () => {
     const u = await authService.getUser();
+    const current = userRef.current;
+    const sameIdentity = current?.id === u?.id && current?.email === u?.email;
+    if (sameIdentity) return;
+    userRef.current = u;
     setUser(u);
   };
 
@@ -34,6 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     authService.getUser().then((resolvedUser) => {
       if (!active) return;
+      userRef.current = resolvedUser;
       setUser(resolvedUser);
       setLoading(false);
       if (resolvedUser) {
@@ -43,13 +49,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     const { data: { subscription } } = authService.onAuthStateChange((nextUser) => {
+      const previousUser = userRef.current;
+      const sameIdentity = previousUser?.id === nextUser?.id && previousUser?.email === nextUser?.email;
       const currentHeartbeatUserId = heartbeatUserIdRef.current;
       if (currentHeartbeatUserId && currentHeartbeatUserId !== nextUser?.id) {
         presenceService.stopHeartbeat(currentHeartbeatUserId);
         heartbeatUserIdRef.current = null;
       }
 
-      setUser(nextUser);
+      userRef.current = nextUser;
+      if (!sameIdentity) {
+        setUser(nextUser);
+      }
 
       if (nextUser && heartbeatUserIdRef.current !== nextUser.id) {
         heartbeatUserIdRef.current = nextUser.id;
@@ -69,6 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     await authService.signOut();
+    userRef.current = null;
     setUser(null);
   };
 

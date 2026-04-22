@@ -27,11 +27,12 @@ export class AuthoritativeGameService {
 
   constructor(client: SupabaseClient) {
     this.client = client;
-    this.baseUrl = (process.env.NEXT_PUBLIC_GAME_API_URL ?? "").replace(/\/+$/, "");
+    const configuredBaseUrl = (process.env.NEXT_PUBLIC_GAME_API_URL ?? "/api").trim();
+    this.baseUrl = configuredBaseUrl.replace(/\/+$/, "");
   }
 
   isEnabled(): boolean {
-    return this.baseUrl.length > 0;
+    return true;
   }
 
   private async authHeaders(): Promise<HeadersInit> {

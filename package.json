@@ -3,11 +3,9 @@
     "private": true,
     "version": "0.1.0",
     "scripts": {
-        "build": "npm run build:web && npm run build:server",
+        "build": "npm run build:web",
         "build:web": "npm --workspace apps-web run build",
-        "build:server": "deno task build || echo \"No Deno build step\"",
         "dev:web": "npm --workspace apps-web run dev",
-        "dev:server": "",
         "lint": "npm --workspace apps-web run lint",
         "test": "npm --workspace apps-web run test || echo \"No tests yet\""
     },

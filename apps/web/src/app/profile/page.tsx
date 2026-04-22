@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { createClient } from "../../utils/supabase/client";
 import { useAuth } from "../../providers/AuthProvider";
@@ -108,6 +108,8 @@ function RecentHistory({ history }: { history: PuzzleResult[] }) {
 
 export default function ProfilePage() {
   const { user, loading: authLoading } = useAuth();
+  const userId = user?.id ?? null;
+  const userEmail = user?.email ?? null;
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [editing, setEditing] = useState(false);
   const [displayName, setDisplayName] = useState("");
@@ -118,6 +120,7 @@ export default function ProfilePage() {
   const [lp, setLp] = useState(0);
   const [localStats, setLocalStats] = useState({ played: 0, won: 0, winRate: 0, streak: 0, maxStreak: 0, averageAttempts: 0 });
   const [history, setHistory] = useState<PuzzleResult[]>([]);
+  const lastLoadedUserIdRef = useRef<string | null>(null);
 
   const loadProfileData = useCallback(async (activeUserId: string, activeUserEmail: string | null | undefined) => {
     const [profileResult, stats, historyResult] = await Promise.all([
@@ -146,15 +149,19 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (authLoading) return;
-    if (!user) {
+    if (!userId) {
       setLoading(false);
+      return;
+    }
+    if (lastLoadedUserIdRef.current === userId) {
       return;
     }
 
     let active = true;
     setLoading(true);
+    lastLoadedUserIdRef.current = userId;
 
-    loadProfileData(user.id, user.email)
+    loadProfileData(userId, userEmail)
       .then(({ profileResult, stats, historyResult, points }) => {
         if (!active) return;
         setLocalStats(stats);
@@ -174,7 +181,7 @@ export default function ProfilePage() {
     return () => {
       active = false;
     };
-  }, [authLoading, user, loadProfileData]);
+  }, [authLoading, userId, userEmail, loadProfileData]);
 
   async function handleSaveProfile() {
     if (!user) return;

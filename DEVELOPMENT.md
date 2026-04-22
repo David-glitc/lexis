@@ -539,3 +539,8 @@
 - Optimized landing page parallax scroll handler with requestAnimationFrame scheduling and `translate3d` transforms plus reduced-motion short-circuiting to reduce main-thread scroll jank.
 - Added aggressive static asset cache headers and compression-oriented Next config settings (`compress`, immutable asset caching, explicit `sw.js` no-cache, image format hints, `poweredByHeader` disabled).
 
+## 2026-04-22 19:34 - Dictionary Pipeline + Anagram Validation
+- Replaced static `WordService` word arrays with dictionary-backed validation powered by `an-array-of-english-words`, normalizing and filtering to deterministic lowercase 5-letter words for solution/guess pools.
+- Added `WordService.isValidWord()` to support anagram validation for variable-length words while preserving strict 5-letter validation for classic puzzle guesses.
+- Added module typing shim for `an-array-of-english-words` and created `/arena/anagram` page with timed rack gameplay using the shared anagram engine and dictionary validation flow.
+
