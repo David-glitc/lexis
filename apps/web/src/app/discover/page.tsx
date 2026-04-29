@@ -15,6 +15,12 @@ type DiscoverPost = {
   createdAt: string;
 };
 
+type TrendSnapshot = {
+  totalPlays: number;
+  avgAttempts: number;
+  uniqueWords: number;
+};
+
 const supabase = createClient();
 const PAGE_SIZE = 12;
 
@@ -26,6 +32,7 @@ export default function DiscoverPage() {
   const [wordMeaning, setWordMeaning] = useState<string>("");
   const [funFact, setFunFact] = useState<string>("");
   const [selectedWord, setSelectedWord] = useState<string>("word");
+  const [trend, setTrend] = useState<TrendSnapshot>({ totalPlays: 0, avgAttempts: 0, uniqueWords: 0 });
   const observerRef = useRef<HTMLDivElement | null>(null);
 
   const hasMore = posts.length >= offset;
@@ -54,6 +61,11 @@ export default function DiscoverPage() {
     fetchPosts(0).then((first) => {
       if (!active) return;
       setPosts(first);
+      const attemptsAvg = first.length
+        ? Math.round((first.reduce((sum, post) => sum + post.attempts, 0) / first.length) * 10) / 10
+        : 0;
+      const uniqueWordCount = new Set(first.map((post) => post.word.toLowerCase())).size;
+      setTrend({ totalPlays: first.length, avgAttempts: attemptsAvg, uniqueWords: uniqueWordCount });
       setOffset(first.length);
       setLoading(false);
     }).catch(() => {
@@ -111,14 +123,42 @@ export default function DiscoverPage() {
 
   const title = useMemo(() => `Discover`, []);
 
+  function computeWordMoatScore(word: string): number {
+    const normalizedWord = word.toLowerCase();
+    const uniqueLetters = new Set(normalizedWord.split("")).size;
+    const vowelCount = normalizedWord.split("").filter((char) => "aeiou".includes(char)).length;
+    const rarityBoost = normalizedWord.split("").filter((char) => "qzxjkv".includes(char)).length * 8;
+    return Math.max(10, Math.min(99, uniqueLetters * 12 + (5 - vowelCount) * 6 + rarityBoost));
+  }
+
+  function buildWordStyleLabel(attempts: number): string {
+    if (attempts <= 2) return "Sniper Solve";
+    if (attempts <= 4) return "Steady Logic";
+    return "Clutch Finish";
+  }
+
   return (
     <AppShell header={<div className="font-display text-lg font-bold text-white">{title}</div>}>
       <div className="space-y-4 pt-3">
-        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-4">
-          <div className="text-xs uppercase tracking-widest text-zinc-500 font-mono mb-2">Word Spotlight</div>
+        <div className="rounded-2xl border border-[#7de96f]/30 bg-[linear-gradient(150deg,rgba(106,191,94,0.18),rgba(45,73,35,0.12))] p-4">
+          <div className="text-xs uppercase tracking-widest text-[#9bf28f] font-mono mb-2">Word Spotlight</div>
           <div className="text-white font-display text-2xl">{selectedWord.toUpperCase()}</div>
-          <p className="mt-2 text-sm text-zinc-300">{wordMeaning || "Tap a word in the feed to load its meaning."}</p>
-          <p className="mt-2 text-xs text-zinc-500">{funFact || "Fun language fact will appear here."}</p>
+          <p className="mt-2 text-sm text-zinc-100">{wordMeaning || "Tap a word in the feed to load its meaning."}</p>
+          <p className="mt-2 text-xs text-zinc-300">{funFact || "Fun language fact will appear here."}</p>
+          <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-lg border border-white/15 bg-black/20 p-2">
+              <div className="text-[10px] uppercase tracking-wide text-zinc-400">Plays</div>
+              <div className="text-white font-mono">{trend.totalPlays}</div>
+            </div>
+            <div className="rounded-lg border border-white/15 bg-black/20 p-2">
+              <div className="text-[10px] uppercase tracking-wide text-zinc-400">Avg Guesses</div>
+              <div className="text-white font-mono">{trend.avgAttempts || "—"}</div>
+            </div>
+            <div className="rounded-lg border border-white/15 bg-black/20 p-2">
+              <div className="text-[10px] uppercase tracking-wide text-zinc-400">Word Variety</div>
+              <div className="text-white font-mono">{trend.uniqueWords}</div>
+            </div>
+          </div>
         </div>
 
         {loading ? (
@@ -128,7 +168,7 @@ export default function DiscoverPage() {
         ) : (
           <div className="space-y-3">
             {posts.map((post) => (
-              <div key={post.id} className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4">
+              <div key={post.id} className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4 shadow-[0_8px_24px_rgba(0,0,0,0.24)]">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <div className="text-sm text-white font-medium">{post.displayName}</div>
@@ -152,6 +192,15 @@ export default function DiscoverPage() {
                     <div className="text-xs text-zinc-500">Guesses</div>
                     <div className="font-mono text-white">{post.attempts}/6</div>
                   </div>
+                </div>
+
+                <div className="mt-3 flex items-center gap-2">
+                  <span className="rounded-full border border-[#6abf5e]/35 bg-[#6abf5e]/10 px-2 py-1 text-[10px] font-mono text-[#9bf28f]">
+                    Moat Score {computeWordMoatScore(post.word)}
+                  </span>
+                  <span className="rounded-full border border-white/15 bg-white/[0.05] px-2 py-1 text-[10px] font-mono text-zinc-300">
+                    {buildWordStyleLabel(post.attempts)}
+                  </span>
                 </div>
 
                 <div className="mt-3">

@@ -572,3 +572,8 @@
 - Added profile analytics expansion with a points growth chart from ledger history to improve user data visibility.
 - Added `/discover` infinite-scroll feed showing solved words from players with profile links, plus external meaning/fact enrichment using free public APIs.
 
+## 2026-03-16 22:31 - Discover Moat + Brighter Anagram Palette
+- Upgraded `/discover` with stronger content moat signals: trend snapshot cards, per-word moat score, and play-style labels (`Sniper Solve`, `Steady Logic`, `Clutch Finish`) to differentiate social feed value.
+- Refined Discover visual hierarchy with brighter spotlight gradients and deeper card styling for a more distinctive feed identity.
+- Brightened anagram wheel letter styling with higher-energy color shades, stronger highlights, and improved text readability/shadow so 2D letter balls pop clearly on all screens.
+

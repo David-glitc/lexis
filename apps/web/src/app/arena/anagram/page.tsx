@@ -416,11 +416,11 @@ function AnagramArenaClientPage() {
       displayedRackLetters.map((letter, index) => {
         const seed = (letter.charCodeAt(0) + index * 17) % 5;
         const shades = [
-          { top: "#4d7f47", base: "#2e4e2a", edge: "#79c36d" },
-          { top: "#4e5c7f", base: "#2b3148", edge: "#8198d6" },
-          { top: "#7a5b3e", base: "#4a3523", edge: "#c79864" },
-          { top: "#6b4b7d", base: "#3f2b4a", edge: "#b688d6" },
-          { top: "#3f6f73", base: "#234448", edge: "#77bcc3" },
+          { top: "#8BFF80", base: "#3D8A37", edge: "#B9FFB2" },
+          { top: "#85B7FF", base: "#3E5EA3", edge: "#B8D2FF" },
+          { top: "#FFC97A", base: "#A46B2E", edge: "#FFE0AC" },
+          { top: "#D8A2FF", base: "#7A4AAD", edge: "#EDCDFF" },
+          { top: "#89F1FF", base: "#2C8C97", edge: "#C1FAFF" },
         ];
         return shades[seed];
       }),
@@ -492,7 +492,7 @@ function AnagramArenaClientPage() {
                   const pos = getNodePosition(index, displayedRackLetters.length);
                   const active = activePath.includes(index);
                   const motion = nodeMotion[index];
-                  const palette = nodePalette[index] ?? { top: "#4d7f47", base: "#2e4e2a", edge: "#79c36d" };
+                  const palette = nodePalette[index] ?? { top: "#8BFF80", base: "#3D8A37", edge: "#B9FFB2" };
 
                   return (
                     <button
@@ -502,7 +502,7 @@ function AnagramArenaClientPage() {
                         nodeRefs.current[index] = element;
                       }}
                       className={`absolute rounded-full flex items-center justify-center select-none transition-colors ${
-                        active ? "text-white" : "text-zinc-200"
+                        active ? "text-white" : "text-white"
                       } ${round.completed ? "opacity-40 cursor-not-allowed" : ""}`}
                       style={{
                         left: pos.x,
@@ -512,11 +512,11 @@ function AnagramArenaClientPage() {
                         transform: `translate(-50%, -50%) scale(${active ? 1.1 : 1})`,
                         border: active ? "1px solid #b8f9a4" : `1px solid ${palette.edge}`,
                         background: active
-                          ? "radial-gradient(circle at 30% 25%, #8dd882 0%, #538d4e 45%, #2e5a2a 100%)"
-                          : `radial-gradient(circle at 30% 25%, ${palette.top} 0%, ${palette.base} 62%, #121212 100%)`,
+                          ? "radial-gradient(circle at 30% 25%, #C5FFB8 0%, #6BCF5A 45%, #3D8A37 100%)"
+                          : `radial-gradient(circle at 30% 25%, ${palette.top} 0%, ${palette.base} 60%, #1c1c1c 100%)`,
                         boxShadow: active
-                          ? "0 10px 20px rgba(83,141,78,0.45), inset 0 2px 7px rgba(255,255,255,0.28), inset 0 -6px 10px rgba(0,0,0,0.35)"
-                          : "0 8px 18px rgba(0,0,0,0.45), inset 0 2px 6px rgba(255,255,255,0.2), inset 0 -5px 9px rgba(0,0,0,0.4)",
+                          ? "0 12px 22px rgba(83,141,78,0.55), inset 0 3px 8px rgba(255,255,255,0.4), inset 0 -6px 10px rgba(0,0,0,0.3)"
+                          : "0 10px 20px rgba(0,0,0,0.42), inset 0 3px 8px rgba(255,255,255,0.32), inset 0 -6px 10px rgba(0,0,0,0.35)",
                         transition:
                           "left 360ms cubic-bezier(0.22, 1, 0.36, 1), top 360ms cubic-bezier(0.22, 1, 0.36, 1), transform 120ms ease, border-color 120ms ease, box-shadow 150ms ease",
                         touchAction: "none",
@@ -529,7 +529,9 @@ function AnagramArenaClientPage() {
                       onPointerDown={(e) => onPointerDownNode(index, e)}
                       disabled={round.completed}
                     >
-                      <span className="font-display text-sm font-bold">{letter.toUpperCase()}</span>
+                      <span className="font-display text-sm font-bold" style={{ textShadow: "0 1px 6px rgba(0,0,0,0.35)" }}>
+                        {letter.toUpperCase()}
+                      </span>
                     </button>
                   );
                 })}
