@@ -79,6 +79,13 @@ const icons = {
       <path d="M12 7v10" />
     </svg>
   ),
+  discover: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M7 12h10" />
+      <path d="M12 7v10" />
+    </svg>
+  ),
   more: (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="5" r="1.5" />
@@ -95,6 +102,7 @@ const SIDEBAR_LINKS: (NavItem | "separator")[] = [
   { href: "/hints", label: "Training", icon: icons.training },
   { href: "/arena", label: "Puzzle Arena", icon: icons.arena },
   { href: "/challenges", label: "Challenges", icon: icons.challenges },
+  { href: "/discover", label: "Discover", icon: icons.discover },
   { href: "/leaderboard", label: "Leaderboard", icon: icons.leaderboard },
   { href: "/friends", label: "Friends", icon: icons.friends },
   { href: "/profile", label: "Profile", icon: icons.profile },
@@ -114,6 +122,7 @@ const MORE_LINKS: NavItem[] = [
   { href: "/friends", label: "Friends", icon: icons.friends },
   { href: "/settings", label: "Settings", icon: icons.settings },
   { href: "/arena", label: "Puzzle Arena", icon: icons.arena },
+  { href: "/discover", label: "Discover", icon: icons.discover },
 ];
 
 export function AppShell({ header, footer, children, sidebar = true }: AppShellProps) {

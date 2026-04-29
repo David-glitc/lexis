@@ -257,6 +257,40 @@ function ModalOverlay({ onClose, children }: { onClose: () => void; children: Re
   );
 }
 
+function WordlyAnalysis({ puzzle }: { puzzle: MockPuzzle }) {
+  const guesses = puzzle.rows.map((row) => row.letters.map((cell) => cell.letter).join(""));
+  const attempts = guesses.length;
+  const correctnessProbability = Math.max(3, Math.min(95, Math.round((1 / Math.max(1, 6 - attempts)) * 100)));
+  const vowels = puzzle.solution.split("").filter((char) => "aeiou".includes(char)).length;
+  const uniqueLetters = new Set(puzzle.solution.split("")).size;
+  const confidence =
+    attempts <= 2 ? "High signal opening." : attempts <= 4 ? "Balanced pathing." : "Late solve pressure.";
+
+  return (
+    <div className="mt-4 rounded-xl border border-white/[0.06] bg-white/[0.03] p-3">
+      <div className="mb-2 text-[10px] uppercase tracking-widest text-zinc-500 font-mono">Wordly Analysis</div>
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <div className="rounded-lg border border-white/[0.06] bg-black/20 p-2">
+          <div className="text-zinc-500">Guess Correctness</div>
+          <div className="text-[#6abf5e] font-mono">{correctnessProbability}%</div>
+        </div>
+        <div className="rounded-lg border border-white/[0.06] bg-black/20 p-2">
+          <div className="text-zinc-500">Vowel Density</div>
+          <div className="text-white font-mono">{vowels}/5</div>
+        </div>
+        <div className="rounded-lg border border-white/[0.06] bg-black/20 p-2">
+          <div className="text-zinc-500">Unique Letters</div>
+          <div className="text-white font-mono">{uniqueLetters}</div>
+        </div>
+        <div className="rounded-lg border border-white/[0.06] bg-black/20 p-2">
+          <div className="text-zinc-500">Path Quality</div>
+          <div className="text-white font-mono">{confidence}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StatsModal({ onClose, onShare, puzzle, mode, dailyNumber, hardMode }: {
   onClose: () => void;
   onShare: () => void;
@@ -268,13 +302,18 @@ function StatsModal({ onClose, onShare, puzzle, mode, dailyNumber, hardMode }: {
   const [stats, setStats] = useState({ played: 0, won: 0, winRate: 0, streak: 0, maxStreak: 0, averageAttempts: 0 });
   const [history, setHistory] = useState<{ attempts: number; won: boolean }[]>([]);
   const [countdown, setCountdown] = useState(getCountdownToMidnight());
+  const [dailyGlobal, setDailyGlobal] = useState({ players: 0, completions: 0, avgAttempts: 0, percentile: null as number | null });
   const { user: statsUser } = useAuth();
 
   useEffect(() => {
     if (!statsUser) return;
     puzzleService.getStats(statsUser.id).then(setStats).catch(() => {});
     puzzleService.getHistory(statsUser.id).then((h) => setHistory(h.map((r) => ({ attempts: r.attempts, won: r.won })))).catch(() => {});
-  }, [statsUser]);
+    if (mode === "daily") {
+      const todayKey = toUtcDateKey(new Date());
+      puzzleService.getDailyGlobalStats(todayKey, statsUser.id).then(setDailyGlobal).catch(() => {});
+    }
+  }, [statsUser, mode]);
 
   useEffect(() => {
     const interval = setInterval(() => setCountdown(getCountdownToMidnight()), 1000);
@@ -308,6 +347,32 @@ function StatsModal({ onClose, onShare, puzzle, mode, dailyNumber, hardMode }: {
 
       <h3 className="text-white text-center uppercase tracking-widest text-[10px] font-display font-bold mb-2">Guess Distribution</h3>
       <GuessDistribution history={history} />
+      {mode === "daily" && (
+        <div className="mt-4 rounded-xl border border-white/[0.06] bg-white/[0.03] p-3">
+          <div className="mb-2 text-[10px] uppercase tracking-widest text-zinc-500 font-mono">Global Daily Stats</div>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="rounded-lg border border-white/[0.06] bg-black/20 p-2">
+              <div className="text-zinc-500">Players Today</div>
+              <div className="text-white font-mono">{dailyGlobal.players}</div>
+            </div>
+            <div className="rounded-lg border border-white/[0.06] bg-black/20 p-2">
+              <div className="text-zinc-500">Completions</div>
+              <div className="text-white font-mono">{dailyGlobal.completions}</div>
+            </div>
+            <div className="rounded-lg border border-white/[0.06] bg-black/20 p-2">
+              <div className="text-zinc-500">Avg Guesses</div>
+              <div className="text-white font-mono">{dailyGlobal.avgAttempts || "—"}</div>
+            </div>
+            <div className="rounded-lg border border-white/[0.06] bg-black/20 p-2">
+              <div className="text-zinc-500">Your Percentile</div>
+              <div className="text-[#6abf5e] font-mono">
+                {dailyGlobal.percentile === null ? "N/A" : `${dailyGlobal.percentile}th`}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      <WordlyAnalysis puzzle={puzzle} />
 
       {gameOver && (
         <div className="mt-5 flex items-center border-t border-white/[0.06] pt-4">
@@ -870,6 +935,15 @@ export default function PlayPage() {
       const challengeService = new DailyChallengeService(supabase);
       try {
         const challenge = await challengeService.getTodayChallenge();
+        if (challenge && user) {
+          const todayKey = toUtcDateKey(new Date(challenge.date));
+          const alreadyCompleted = await puzzleService.hasCompletedDailySpeed(user.id, todayKey);
+          if (alreadyCompleted) {
+            toast("You already completed today's speed run");
+            router.replace("/play?mode=daily");
+            return;
+          }
+        }
         setSpeedChallenge(challenge);
         if (challenge) {
           const next: MockPuzzle = {
@@ -1000,7 +1074,7 @@ export default function PlayPage() {
 
   const userInitial = user?.email?.[0]?.toUpperCase();
   const active = (href: string) => pathname.startsWith(href);
-  const moreActive = ["/friends", "/settings", "/arena"].some((href) => active(href));
+  const moreActive = ["/friends", "/settings", "/arena", "/discover"].some((href) => active(href));
 
   return (
     <div className="h-[100dvh] flex flex-col bg-[#060606] relative noise">
@@ -1267,6 +1341,7 @@ export default function PlayPage() {
             { href: "/friends", label: "Friends", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg> },
             { href: "/settings", label: "Settings", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.604.852.997 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg> },
             { href: "/arena", label: "Puzzle Arena", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M7 12h10" /><path d="M12 7v10" /></svg> },
+            { href: "/discover", label: "Discover", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M7 12h10" /><path d="M12 7v10" /></svg> },
           ].map((item) => (
             <Link
               key={item.href}

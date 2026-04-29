@@ -161,6 +161,15 @@ export class FriendsService {
     return data as Friendship | null;
   }
 
+  async getFriendshipStatus(userA: string, userB: string): Promise<FriendshipStatus | null> {
+    try {
+      const relationship = await this.getFriendship(userA, userB);
+      return relationship?.status ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   async getFriendsList(userId: string): Promise<FriendWithProfile[]> {
     const { data: sent } = await this.client
       .from("friendships")

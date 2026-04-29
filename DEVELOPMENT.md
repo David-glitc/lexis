@@ -558,3 +558,17 @@
 - Replaced the Anagram text input with a gesture-driven letter wheel: pointer down selects a start node, dragging extends a path, pointer release submits.
 - UI now renders connections as an SVG line layer and validates/persists words on gesture end.
 
+## 2026-03-16 21:18 - Anagram 3D Balls + Social UX Fold
+- Updated `/arena/anagram` letter nodes with multi-shade radial surfaces, stronger depth shadows, and smoother position transitions so shuffle visibly animates balls into their new positions.
+- Reworked anagram pointer hit-detection to use actual rendered node centers via element refs, improving draw reliability on both mobile and desktop while balls animate.
+- Updated `/u/[username]` so Add Friend is disabled with clear button states when the current user is already connected or has a pending relationship.
+- Updated `/challenges` history to fold completed and expired challenges into collapsible sections and added subtle card depth styling for a cleaner polished layout.
+
+## 2026-03-16 22:04 - UX Expansion: Whimsical UI + Daily Intelligence + Discover
+- Updated shared `Button` styles with whimsical gradient/shadow treatment and lifted hover behavior to add playful feel across the UI without breaking current variants.
+- Removed landing-page signed-in redirect so authenticated users can still browse `/` and retained sign-in/play actions for both auth states.
+- Hardened Speed mode to prevent repeat daily completions by checking existing `daily_speed` completion for the day before starting a new run.
+- Added Daily stats intelligence in Play statistics modal (`players`, `completions`, `avg guesses`, user percentile) plus a `Wordly Analysis` panel with correctness and word-composition signals.
+- Added profile analytics expansion with a points growth chart from ledger history to improve user data visibility.
+- Added `/discover` infinite-scroll feed showing solved words from players with profile links, plus external meaning/fact enrichment using free public APIs.
+

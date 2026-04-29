@@ -75,6 +75,7 @@ function AnagramArenaClientPage() {
   const [showHistoryPanel, setShowHistoryPanel] = useState(false);
 
   const wheelRef = useRef<HTMLDivElement | null>(null);
+  const nodeRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   const draggingRef = useRef(false);
   const dragPointerIdRef = useRef<number | null>(null);
@@ -290,16 +291,23 @@ function AnagramArenaClientPage() {
   }, [finalizeWord]);
 
   useEffect(() => {
-    const thresholdPx = NODE_SIZE_PX / 2 + 10;
+    const thresholdPx = NODE_SIZE_PX / 2 + 14;
     const thresholdSq = thresholdPx * thresholdPx;
 
     function findNearestIndex(x: number, y: number): number | null {
+      const wheelEl = wheelRef.current;
+      if (!wheelEl) return null;
+      const wheelRect = wheelEl.getBoundingClientRect();
       let nearest: number | null = null;
       let bestDist = Infinity;
       for (let i = 0; i < displayedRackLetters.length; i += 1) {
-        const pos = getNodePosition(i, displayedRackLetters.length);
-        const dx = x - pos.x;
-        const dy = y - pos.y;
+        const nodeEl = nodeRefs.current[i];
+        if (!nodeEl) continue;
+        const nodeRect = nodeEl.getBoundingClientRect();
+        const nodeX = nodeRect.left - wheelRect.left + nodeRect.width / 2;
+        const nodeY = nodeRect.top - wheelRect.top + nodeRect.height / 2;
+        const dx = x - nodeX;
+        const dy = y - nodeY;
         const dist = dx * dx + dy * dy;
         if (dist <= thresholdSq && dist < bestDist) {
           bestDist = dist;
@@ -403,6 +411,22 @@ function AnagramArenaClientPage() {
     [displayedRackLetters]
   );
 
+  const nodePalette = useMemo(
+    () =>
+      displayedRackLetters.map((letter, index) => {
+        const seed = (letter.charCodeAt(0) + index * 17) % 5;
+        const shades = [
+          { top: "#4d7f47", base: "#2e4e2a", edge: "#79c36d" },
+          { top: "#4e5c7f", base: "#2b3148", edge: "#8198d6" },
+          { top: "#7a5b3e", base: "#4a3523", edge: "#c79864" },
+          { top: "#6b4b7d", base: "#3f2b4a", edge: "#b688d6" },
+          { top: "#3f6f73", base: "#234448", edge: "#77bcc3" },
+        ];
+        return shades[seed];
+      }),
+    [displayedRackLetters]
+  );
+
   return (
     <AppShell
       header={
@@ -468,13 +492,17 @@ function AnagramArenaClientPage() {
                   const pos = getNodePosition(index, displayedRackLetters.length);
                   const active = activePath.includes(index);
                   const motion = nodeMotion[index];
+                  const palette = nodePalette[index] ?? { top: "#4d7f47", base: "#2e4e2a", edge: "#79c36d" };
 
                   return (
                     <button
                       key={`${letter}-${index}`}
                       type="button"
+                      ref={(element) => {
+                        nodeRefs.current[index] = element;
+                      }}
                       className={`absolute rounded-full flex items-center justify-center select-none transition-colors ${
-                        active ? "bg-[#538d4e] text-white" : "bg-[#111] text-zinc-300 hover:bg-[#1a1a1a]"
+                        active ? "text-white" : "text-zinc-200"
                       } ${round.completed ? "opacity-40 cursor-not-allowed" : ""}`}
                       style={{
                         left: pos.x,
@@ -482,8 +510,15 @@ function AnagramArenaClientPage() {
                         width: NODE_SIZE_PX,
                         height: NODE_SIZE_PX,
                         transform: `translate(-50%, -50%) scale(${active ? 1.1 : 1})`,
-                        border: active ? "1px solid #6abf5e" : "1px solid rgba(255,255,255,0.08)",
-                        transition: "transform 120ms ease, background-color 120ms ease, border-color 120ms ease",
+                        border: active ? "1px solid #b8f9a4" : `1px solid ${palette.edge}`,
+                        background: active
+                          ? "radial-gradient(circle at 30% 25%, #8dd882 0%, #538d4e 45%, #2e5a2a 100%)"
+                          : `radial-gradient(circle at 30% 25%, ${palette.top} 0%, ${palette.base} 62%, #121212 100%)`,
+                        boxShadow: active
+                          ? "0 10px 20px rgba(83,141,78,0.45), inset 0 2px 7px rgba(255,255,255,0.28), inset 0 -6px 10px rgba(0,0,0,0.35)"
+                          : "0 8px 18px rgba(0,0,0,0.45), inset 0 2px 6px rgba(255,255,255,0.2), inset 0 -5px 9px rgba(0,0,0,0.4)",
+                        transition:
+                          "left 360ms cubic-bezier(0.22, 1, 0.36, 1), top 360ms cubic-bezier(0.22, 1, 0.36, 1), transform 120ms ease, border-color 120ms ease, box-shadow 150ms ease",
                         touchAction: "none",
                         animation: active
                           ? "none"

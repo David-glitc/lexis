@@ -95,7 +95,7 @@ function ChallengeCard({
   const iReceivedIt = challenge.challenged_id === userId;
 
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4">
+    <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4 shadow-[0_8px_28px_rgba(0,0,0,0.25)] backdrop-blur-[2px]">
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.06]">
@@ -337,6 +337,10 @@ export default function ChallengesPage() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [historyExpanded, setHistoryExpanded] = useState<{ completed: boolean; expired: boolean }>({
+    completed: true,
+    expired: false,
+  });
 
   function flash(text: string, type: "success" | "error" = "success") {
     setMessage({ text, type });
@@ -415,6 +419,8 @@ export default function ChallengesPage() {
   const active = challenges.filter((c) => c.status === "active");
   const pending = challenges.filter((c) => c.status === "pending");
   const history = challenges.filter((c) => c.status === "completed" || c.status === "expired");
+  const completedHistory = history.filter((c) => c.status === "completed");
+  const expiredHistory = history.filter((c) => c.status === "expired");
 
   const tabCounts: Record<Tab, number> = {
     active: active.length,
@@ -518,6 +524,55 @@ export default function ChallengesPage() {
               Send a new challenge
             </button>
           )}
+        </div>
+      ) : tab === "history" ? (
+        <div className="space-y-3">
+          <div className="rounded-xl border border-white/[0.06] bg-white/[0.03]">
+            <button
+              type="button"
+              onClick={() => setHistoryExpanded((prev) => ({ ...prev, completed: !prev.completed }))}
+              className="flex w-full items-center justify-between px-4 py-3 text-left"
+            >
+              <span className="font-body text-sm text-white">Completed</span>
+              <span className="font-mono text-xs text-zinc-400">
+                {completedHistory.length} {historyExpanded.completed ? "▾" : "▸"}
+              </span>
+            </button>
+            {historyExpanded.completed && (
+              <div className="space-y-3 border-t border-white/[0.06] p-3">
+                {completedHistory.length === 0 ? (
+                  <p className="py-2 text-center font-body text-xs text-zinc-500">No completed challenges</p>
+                ) : (
+                  completedHistory.map((c) => (
+                    <ChallengeCard key={c.id} challenge={c} userId={user.id} friendsMap={friendsMap} />
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+          <div className="rounded-xl border border-white/[0.06] bg-white/[0.03]">
+            <button
+              type="button"
+              onClick={() => setHistoryExpanded((prev) => ({ ...prev, expired: !prev.expired }))}
+              className="flex w-full items-center justify-between px-4 py-3 text-left"
+            >
+              <span className="font-body text-sm text-white">Expired</span>
+              <span className="font-mono text-xs text-zinc-400">
+                {expiredHistory.length} {historyExpanded.expired ? "▾" : "▸"}
+              </span>
+            </button>
+            {historyExpanded.expired && (
+              <div className="space-y-3 border-t border-white/[0.06] p-3">
+                {expiredHistory.length === 0 ? (
+                  <p className="py-2 text-center font-body text-xs text-zinc-500">No expired challenges</p>
+                ) : (
+                  expiredHistory.map((c) => (
+                    <ChallengeCard key={c.id} challenge={c} userId={user.id} friendsMap={friendsMap} />
+                  ))
+                )}
+              </div>
+            )}
+          </div>
         </div>
       ) : (
         <div className="space-y-3">

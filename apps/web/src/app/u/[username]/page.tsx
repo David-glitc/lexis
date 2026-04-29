@@ -6,7 +6,7 @@ import { useParams } from "next/navigation";
 import { createClient } from "../../../utils/supabase/client";
 import { AppShell } from "../../../components/layout/app-shell";
 import { ProfileService, type UserProfile } from "../../../services/ProfileService";
-import { FriendsService } from "../../../services/FriendsService";
+import { FriendsService, type FriendshipStatus } from "../../../services/FriendsService";
 import { useAuth } from "../../../providers/AuthProvider";
 import { Button } from "../../../components/ui/button";
 import { UserAvatar } from "../../../components/ui/avatars";
@@ -22,6 +22,7 @@ export default function PublicProfilePage() {
   const [loading, setLoading] = useState(true);
   const [requestState, setRequestState] = useState<"idle" | "sent" | "error">("idle");
   const [requestErrorMessage, setRequestErrorMessage] = useState("");
+  const [relationshipStatus, setRelationshipStatus] = useState<FriendshipStatus | null>(null);
   const effectiveTier = useMemo(
     () => (profile ? ProfileService.computeTier(profile.puzzles_won) : "unranked"),
     [profile]
@@ -41,6 +42,24 @@ export default function PublicProfilePage() {
     [user, profile]
   );
 
+  useEffect(() => {
+    if (!user || !profile || user.id === profile.id) {
+      setRelationshipStatus(null);
+      return;
+    }
+    let active = true;
+    friendsService.getFriendshipStatus(user.id, profile.id).then((status) => {
+      if (!active) return;
+      setRelationshipStatus(status);
+    }).catch(() => {
+      if (!active) return;
+      setRelationshipStatus(null);
+    });
+    return () => {
+      active = false;
+    };
+  }, [user, profile]);
+
   async function handleAddFriend() {
     if (!user || !profile) return;
     const { error } = await friendsService.sendFriendRequest(user.id, profile.id);
@@ -59,7 +78,7 @@ export default function PublicProfilePage() {
         </div>
       ) : (
         <div className="space-y-5 pt-4">
-          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-5">
+          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-5 shadow-[0_8px_28px_rgba(0,0,0,0.25)] backdrop-blur-[2px]">
             <div className="flex items-center gap-4">
               <UserAvatar avatarId={profile.avatar_url} displayName={profile.display_name} size={56} />
               <div>
@@ -79,8 +98,16 @@ export default function PublicProfilePage() {
             {profile.bio && <p className="mt-3 text-sm text-zinc-400">{profile.bio}</p>}
             {canAddFriend && (
               <div className="mt-4">
-                <Button size="sm" onClick={handleAddFriend} disabled={requestState === "sent"}>
-                  {requestState === "sent" ? "Request Sent" : "Add Friend"}
+                <Button
+                  size="sm"
+                  onClick={handleAddFriend}
+                  disabled={requestState === "sent" || relationshipStatus === "accepted" || relationshipStatus === "pending"}
+                >
+                  {relationshipStatus === "accepted"
+                    ? "Already Friends"
+                    : relationshipStatus === "pending" || requestState === "sent"
+                    ? "Request Pending"
+                    : "Add Friend"}
                 </Button>
                 {requestState === "error" && (
                   <p className="text-xs text-red-400 mt-2">{requestErrorMessage || "Could not send friend request."}</p>
@@ -107,7 +134,7 @@ export default function PublicProfilePage() {
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-3 text-center">
+    <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-3 text-center shadow-[0_6px_18px_rgba(0,0,0,0.2)]">
       <div className="text-lg font-display font-bold text-white">{value}</div>
       <div className="text-[10px] text-zinc-500 uppercase tracking-wider font-mono">{label}</div>
     </div>

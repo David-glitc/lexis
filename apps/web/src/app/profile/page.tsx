@@ -115,6 +115,38 @@ type AnagramRoundHistoryEntry = {
   topWords: string[];
 };
 
+function PointsGrowthChart({ pointsHistory }: { pointsHistory: { amount: number; created_at: string }[] }) {
+  const recent = pointsHistory.slice(0, 30).reverse();
+  if (!recent.length) return <p className="text-zinc-500 text-sm">No points history yet.</p>;
+
+  let cumulative = 0;
+  const cumulativePoints = recent.map((entry) => {
+    cumulative += Number(entry.amount) || 0;
+    return Math.max(0, cumulative);
+  });
+  const maxValue = Math.max(...cumulativePoints, 1);
+  const points = cumulativePoints
+    .map((value, index) => {
+      const x = (index / Math.max(1, cumulativePoints.length - 1)) * 100;
+      const y = 100 - (value / maxValue) * 100;
+      return `${x},${y}`;
+    })
+    .join(" ");
+
+  return (
+    <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4">
+      <div className="mb-2 text-sm text-zinc-400">Point Growth (Last 30 Awards)</div>
+      <svg viewBox="0 0 100 100" className="h-40 w-full rounded-lg border border-white/[0.06] bg-black/20 p-2">
+        <polyline fill="none" stroke="#6abf5e" strokeWidth="2.5" points={points} />
+      </svg>
+      <div className="mt-2 flex items-center justify-between text-[10px] font-mono text-zinc-500">
+        <span>Older</span>
+        <span>Latest cumulative: {cumulativePoints[cumulativePoints.length - 1]}</span>
+      </div>
+    </div>
+  );
+}
+
 function RecentAnagramRounds({ rounds }: { rounds: AnagramRoundHistoryEntry[] }) {
   if (!rounds.length) return <p className="text-zinc-500 text-sm">No Anagram rounds completed yet.</p>;
 
@@ -163,12 +195,13 @@ export default function ProfilePage() {
   const [lp, setLp] = useState(0);
   const [anagramPoints, setAnagramPoints] = useState(0);
   const [anagramRounds, setAnagramRounds] = useState<AnagramRoundHistoryEntry[]>([]);
+  const [pointsHistory, setPointsHistory] = useState<Array<{ amount: number; created_at: string }>>([]);
   const [localStats, setLocalStats] = useState({ played: 0, won: 0, winRate: 0, streak: 0, maxStreak: 0, averageAttempts: 0 });
   const [history, setHistory] = useState<PuzzleResult[]>([]);
   const lastLoadedUserIdRef = useRef<string | null>(null);
 
   const loadProfileData = useCallback(async (activeUserId: string, activeUserEmail: string | null | undefined) => {
-    const [profileResult, stats, historyResult, anagramRoundHistory] = await Promise.all([
+    const [profileResult, stats, historyResult, anagramRoundHistory, recentPointsHistory] = await Promise.all([
       profileService.getProfile(activeUserId).then(async (existingProfile) => {
         if (existingProfile) return existingProfile;
         return profileService.createProfile(
@@ -187,11 +220,12 @@ export default function ProfilePage() {
       })),
       puzzleService.getHistory(activeUserId).catch(() => [] as PuzzleResult[]),
       pointsService.getAnagramRoundHistory(activeUserId, 6).catch(() => [] as AnagramRoundHistoryEntry[]),
+      pointsService.getPointsHistory(activeUserId, 30).catch(() => [] as Array<{ amount: number; created_at: string }>),
     ]);
 
     const points = await pointsService.getPoints(activeUserId);
     const anagramOnlyPoints = await pointsService.getAnagramPoints(activeUserId);
-    return { profileResult, stats, historyResult, points, anagramOnlyPoints, anagramRoundHistory };
+    return { profileResult, stats, historyResult, points, anagramOnlyPoints, anagramRoundHistory, recentPointsHistory };
   }, []);
 
   useEffect(() => {
@@ -209,13 +243,14 @@ export default function ProfilePage() {
     lastLoadedUserIdRef.current = userId;
 
     loadProfileData(userId, userEmail)
-      .then(({ profileResult, stats, historyResult, points, anagramOnlyPoints, anagramRoundHistory }) => {
+      .then(({ profileResult, stats, historyResult, points, anagramOnlyPoints, anagramRoundHistory, recentPointsHistory }) => {
         if (!active) return;
         setLocalStats(stats);
         setHistory(historyResult);
         setLp(points);
         setAnagramPoints(anagramOnlyPoints);
         setAnagramRounds(anagramRoundHistory);
+        setPointsHistory(recentPointsHistory);
         if (profileResult) {
           setProfile(profileResult);
           setDisplayName(profileResult.display_name);
@@ -383,6 +418,7 @@ export default function ProfilePage() {
         <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4">
           <GuessDistribution history={history} />
         </div>
+        <PointsGrowthChart pointsHistory={pointsHistory} />
 
         <RecentHistory history={history} />
         <RecentAnagramRounds rounds={anagramRounds} />

@@ -279,6 +279,68 @@ export class PuzzleService {
     }
   }
 
+  async hasCompletedDailySpeed(userId: string, dateKey: string): Promise<boolean> {
+    try {
+      const { count, error } = await this.client
+        .from("puzzle_logs")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("mode", "daily_speed")
+        .eq("date_key", dateKey)
+        .in("status", ["won", "lost"]);
+      if (error) return false;
+      return (count ?? 0) > 0;
+    } catch {
+      return false;
+    }
+  }
+
+  async getDailyGlobalStats(dateKey: string, userId?: string): Promise<{
+    players: number;
+    completions: number;
+    avgAttempts: number;
+    percentile: number | null;
+  }> {
+    const empty = { players: 0, completions: 0, avgAttempts: 0, percentile: null as number | null };
+    try {
+      const { data, error } = await this.client
+        .from("puzzle_logs")
+        .select("user_id, attempts, won, mode")
+        .eq("date_key", dateKey)
+        .eq("mode", "daily")
+        .in("status", ["won", "lost"]);
+      if (error || !data) return empty;
+
+      const playerSet = new Set<string>();
+      const winnersAttempts: number[] = [];
+      let userAttempts: number | null = null;
+      for (const row of data as Array<{ user_id: string; attempts: number; won: boolean }>) {
+        playerSet.add(row.user_id);
+        if (row.won) winnersAttempts.push(row.attempts);
+        if (userId && row.user_id === userId && row.won && userAttempts === null) userAttempts = row.attempts;
+      }
+
+      const avgAttempts = winnersAttempts.length
+        ? Math.round((winnersAttempts.reduce((sum, val) => sum + val, 0) / winnersAttempts.length) * 10) / 10
+        : 0;
+
+      let percentile: number | null = null;
+      if (userAttempts !== null && winnersAttempts.length > 0) {
+        const slowerOrEqual = winnersAttempts.filter((attempts) => attempts >= userAttempts).length;
+        percentile = Math.round((slowerOrEqual / winnersAttempts.length) * 100);
+      }
+
+      return {
+        players: playerSet.size,
+        completions: winnersAttempts.length,
+        avgAttempts,
+        percentile,
+      };
+    } catch {
+      return empty;
+    }
+  }
+
   private extractDateKey(puzzleId: string): string | null {
     const match = puzzleId.match(/^daily-(\d{4}-\d{2}-\d{2})$/);
     return match ? match[1] : null;

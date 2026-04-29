@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { LexisLogo } from "../components/ui/lexis-logo";
 import { useAuth } from "../providers/AuthProvider";
 
@@ -137,21 +136,8 @@ function Marquee() {
 
 export default function HomePage() {
   const { user } = useAuth();
-  const router = useRouter();
   const revealRef = useReveal();
   const parallaxRef = useParallax();
-
-  useEffect(() => {
-    if (user) router.replace("/play");
-  }, [user, router]);
-
-  if (user) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#060606]">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/20 border-t-white" />
-      </div>
-    );
-  }
 
   return (
     <div ref={(el) => {

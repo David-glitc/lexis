@@ -12,15 +12,15 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const baseClasses =
-  "inline-flex items-center justify-center rounded-full transition-all font-body font-semibold focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white disabled:opacity-50 disabled:cursor-not-allowed active:scale-95";
+  "inline-flex items-center justify-center rounded-full transition-all duration-200 font-body font-semibold focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 hover:-translate-y-0.5";
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    "bg-white text-black hover:bg-zinc-100 shadow-[0_0_20px_rgba(255,255,255,0.08)]",
+    "bg-gradient-to-b from-[#ffffff] to-[#e9f8e6] text-black border border-[#d6ecd2] shadow-[0_8px_20px_rgba(106,191,94,0.25)] hover:shadow-[0_10px_26px_rgba(106,191,94,0.35)]",
   secondary:
-    "bg-white/[0.06] text-white hover:bg-white/[0.1] border border-white/[0.08]",
+    "bg-gradient-to-b from-white/[0.12] to-white/[0.04] text-white hover:from-white/[0.16] hover:to-white/[0.06] border border-white/[0.12] shadow-[0_6px_16px_rgba(0,0,0,0.25)]",
   ghost:
-    "bg-transparent text-zinc-400 hover:text-white hover:bg-white/[0.06]"
+    "bg-transparent text-zinc-300 hover:text-white hover:bg-white/[0.08] border border-transparent hover:border-white/[0.12]"
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
