@@ -554,3 +554,7 @@
 - Updated Anagram scoring so shorter timers grant more points, and persisted accepted anagram word points to Supabase (`points_ledger`) with idempotency.
 - Extended `/profile` to fetch and display `Anagram Points` from the points ledger.
 
+## 2026-04-29 — Gesture-first Anagram (Draw-to-Form)
+- Replaced the Anagram text input with a gesture-driven letter wheel: pointer down selects a start node, dragging extends a path, pointer release submits.
+- UI now renders connections as an SVG line layer and validates/persists words on gesture end.
+
