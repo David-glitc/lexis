@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AppShell } from "../../../components/layout/app-shell";
 import { Button } from "../../../components/ui/button";
@@ -42,7 +42,7 @@ function getNodePosition(index: number, count: number): { x: number; y: number }
   };
 }
 
-export default function AnagramArenaPage() {
+function AnagramArenaClientPage() {
   const searchParams = useSearchParams();
   const { user } = useAuth();
 
@@ -375,5 +375,19 @@ export default function AnagramArenaPage() {
         </div>
       </div>
     </AppShell>
+  );
+}
+
+export default function AnagramArenaPage() {
+  return (
+    <Suspense
+      fallback={
+        <AppShell header={<h1 className="font-display text-lg font-bold text-white">Anagram Blitz</h1>}>
+          <div className="pt-6 text-sm text-zinc-500 font-body text-center">Loading…</div>
+        </AppShell>
+      }
+    >
+      <AnagramArenaClientPage />
+    </Suspense>
   );
 }
