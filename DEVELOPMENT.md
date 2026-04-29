@@ -549,3 +549,8 @@
 - Added backend-grade DB intelligence script at `apps/web/scripts/db-intel.mjs` to audit Supabase table readiness, row counts, sample records, and health status across core gameplay tables.
 - Added `apps-web` command `pnpm --filter apps-web run db:intel`; generated report at `apps/web/reports/db-intel-1777410120318.json` with all 12 expected tables reachable (`allHealthy: true`).
 
+## 2026-04-29 — Play Anagram Timer + Persist Points + Profile Card
+- Added Anagram Blitz timer picker on `/play` that routes to `/arena/anagram?duration=<seconds>`.
+- Updated Anagram scoring so shorter timers grant more points, and persisted accepted anagram word points to Supabase (`points_ledger`) with idempotency.
+- Extended `/profile` to fetch and display `Anagram Points` from the points ledger.
+
