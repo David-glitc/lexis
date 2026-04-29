@@ -16,16 +16,16 @@ const profileService = new ProfileService(supabase);
 const friendsService = new FriendsService(supabase);
 
 export default function PublicProfilePage() {
-  const effectiveTier = useMemo(
-    () => (profile ? ProfileService.computeTier(profile.puzzles_won) : "unranked"),
-    [profile]
-  );
   const { username } = useParams<{ username: string }>();
   const { user } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [requestState, setRequestState] = useState<"idle" | "sent" | "error">("idle");
   const [requestErrorMessage, setRequestErrorMessage] = useState("");
+  const effectiveTier = useMemo(
+    () => (profile ? ProfileService.computeTier(profile.puzzles_won) : "unranked"),
+    [profile]
+  );
 
   useEffect(() => {
     if (!username) return;
