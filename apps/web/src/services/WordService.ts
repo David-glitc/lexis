@@ -1,22 +1,32 @@
 import englishWords from "an-array-of-english-words";
 import { getUtcDayIndex } from "../utils/utc-date";
 
+function normalizeDictionaryWord(word: string): string {
+  return word.toLowerCase().trim();
+}
+
+const DICTIONARY_SET = new Set(
+  englishWords
+    .map((word) => normalizeDictionaryWord(word))
+    .filter((word) => /^[a-z]+$/.test(word))
+);
+
 const FIVE_LETTER_WORDS = Array.from(
   new Set(
-    englishWords
-      .map((word) => word.toLowerCase().trim())
-      .filter((word) => /^[a-z]{5}$/.test(word))
+    Array.from(DICTIONARY_SET).filter((word) => /^[a-z]{5}$/.test(word))
   )
 );
 
 export class WordService {
   private solutions: string[];
   private validGuesses: Set<string>;
+  private dictionaryWords: Set<string>;
   private usedWords: Set<string>;
 
   constructor() {
     this.solutions = FIVE_LETTER_WORDS;
     this.validGuesses = new Set(FIVE_LETTER_WORDS);
+    this.dictionaryWords = DICTIONARY_SET;
     this.usedWords = new Set();
   }
 
@@ -28,7 +38,7 @@ export class WordService {
     const normalized = word.toLowerCase().trim();
     if (!/^[a-z]+$/.test(normalized)) return false;
     if (normalized.length === 5) return this.isValidGuess(normalized);
-    return englishWords.includes(normalized);
+    return this.dictionaryWords.has(normalized);
   }
 
   getRandomSolution(): string {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "../../../components/layout/app-shell";
 import { Button } from "../../../components/ui/button";
 import { completeRound, createAnagramRound, getRoundSecondsRemaining, submitAnagramWord } from "../../../features/anagram/engine";
@@ -18,17 +18,30 @@ export default function AnagramArenaPage() {
   const [message, setMessage] = useState("");
   const [secondsLeft, setSecondsLeft] = useState(() => getRoundSecondsRemaining(round));
 
+  const roundRef = useRef(round);
+  const lastLeftRef = useRef(secondsLeft);
+
+  useEffect(() => {
+    roundRef.current = round;
+  }, [round]);
+
   useEffect(() => {
     const interval = setInterval(() => {
-      const left = getRoundSecondsRemaining(round);
-      setSecondsLeft(left);
-      if (left === 0 && !round.completed) {
-        completeRound(round);
-        setRound({ ...round });
+      const currentRound = roundRef.current;
+      const left = getRoundSecondsRemaining(currentRound);
+
+      if (left !== lastLeftRef.current) {
+        lastLeftRef.current = left;
+        setSecondsLeft(left);
+      }
+
+      if (left === 0 && !currentRound.completed) {
+        completeRound(currentRound);
+        setRound({ ...currentRound });
       }
     }, 250);
     return () => clearInterval(interval);
-  }, [round]);
+  }, []);
 
   const sortedWords = useMemo(
     () => [...round.foundWords].sort((a, b) => b.length - a.length || a.localeCompare(b)),
@@ -60,6 +73,7 @@ export default function AnagramArenaPage() {
     setEntry("");
     setMessage("");
     setSecondsLeft(nextRound.durationSeconds);
+    lastLeftRef.current = nextRound.durationSeconds;
   };
 
   return (
@@ -83,6 +97,7 @@ export default function AnagramArenaPage() {
                 if (e.key === "Enter") submit();
               }}
               disabled={round.completed}
+              maxLength={6}
               placeholder="Type a word from the rack..."
               className="flex-1 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white text-sm outline-none focus:border-[#6abf5e]"
             />

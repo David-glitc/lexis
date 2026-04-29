@@ -544,3 +544,8 @@
 - Added `WordService.isValidWord()` to support anagram validation for variable-length words while preserving strict 5-letter validation for classic puzzle guesses.
 - Added module typing shim for `an-array-of-english-words` and created `/arena/anagram` page with timed rack gameplay using the shared anagram engine and dictionary validation flow.
 
+## 2026-04-28 22:03 - Anagram Visibility + Supabase DB Intelligence
+- Updated `apps/web/src/app/arena/page.tsx` so Anagram Blitz is marked `Live` with a direct `Play Anagram Blitz` link to `/arena/anagram` instead of being grouped under Coming Soon cards.
+- Added backend-grade DB intelligence script at `apps/web/scripts/db-intel.mjs` to audit Supabase table readiness, row counts, sample records, and health status across core gameplay tables.
+- Added `apps-web` command `pnpm --filter apps-web run db:intel`; generated report at `apps/web/reports/db-intel-1777410120318.json` with all 12 expected tables reachable (`allHealthy: true`).
+
