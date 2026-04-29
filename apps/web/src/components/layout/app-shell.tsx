@@ -171,8 +171,7 @@ export function AppShell({ header, footer, children, sidebar = true }: AppShellP
       .then((p) => {
         if (!active) return;
         const needsUsername = !p?.username;
-        const needsAvatar = !p?.avatar_url;
-        setProfileSetupNeeds(needsUsername || needsAvatar);
+        setProfileSetupNeeds(needsUsername);
         setProfileSetupChecked(true);
       })
       .catch(() => {
@@ -239,7 +238,7 @@ export function AppShell({ header, footer, children, sidebar = true }: AppShellP
             <div className="mb-4 rounded-2xl border border-[#6abf5e]/25 bg-[#538d4e]/10 p-4">
               <div className="text-xs uppercase tracking-wider font-mono text-[#6abf5e]">Complete your profile</div>
               <div className="mt-1 text-sm text-zinc-200 font-body">
-                Set your <span className="text-white font-semibold">username</span> and <span className="text-white font-semibold">avatar</span> to unlock invites and make your profile discoverable.
+                Set your <span className="text-white font-semibold">username</span> to unlock invites and make your profile discoverable.
               </div>
               <div className="mt-3">
                 <Link

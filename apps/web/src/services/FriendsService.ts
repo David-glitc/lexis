@@ -52,42 +52,48 @@ export class FriendsService {
 
   async sendFriendRequest(requesterId: string, receiverId: string): Promise<{ error: string | null }> {
     try {
-    if (requesterId === receiverId) {
-      return { error: "Cannot send friend request to yourself" };
-    }
-
-    const existing = await this.getFriendship(requesterId, receiverId);
-    if (existing) {
-      if (existing.status === "accepted") return { error: "Already friends" };
-      if (existing.status === "pending") return { error: "Request already pending" };
-      if (existing.status === "blocked") return { error: "This user is blocked" };
-      if (existing.status === "declined") {
-        const { error } = await this.client
-          .from("friendships")
-          .update({
-            requester_id: requesterId,
-            receiver_id: receiverId,
-            status: "pending",
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", existing.id);
-        return { error: error?.message ?? null };
+      if (requesterId === receiverId) {
+        return { error: "Cannot send friend request to yourself" };
       }
-    }
 
-    const { error } = await this.client.from("friendships").insert({
-      requester_id: requesterId,
-      receiver_id: receiverId,
-      status: "pending",
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    });
-    if (error?.message?.toLowerCase().includes("duplicate") || error?.message?.toLowerCase().includes("unique")) {
-      return { error: "Request already pending" };
-    }
-    return { error: error?.message ?? null };
-    } catch {
-      return { error: "Could not send friend request" };
+      const existing = await this.getFriendship(requesterId, receiverId);
+      if (existing) {
+        if (existing.status === "accepted") return { error: "Already friends" };
+        if (existing.status === "pending") {
+          if (existing.requester_id === receiverId) {
+            return { error: "This user already sent you a friend request. Open Requests to accept it." };
+          }
+          return { error: "Request already pending" };
+        }
+        if (existing.status === "blocked") return { error: "This user is blocked" };
+        if (existing.status === "declined") {
+          const { error } = await this.client
+            .from("friendships")
+            .update({
+              requester_id: requesterId,
+              receiver_id: receiverId,
+              status: "pending",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", existing.id);
+          return { error: error?.message ?? null };
+        }
+      }
+
+      const { error } = await this.client.from("friendships").insert({
+        requester_id: requesterId,
+        receiver_id: receiverId,
+        status: "pending",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      });
+      if (error?.message?.toLowerCase().includes("duplicate") || error?.message?.toLowerCase().includes("unique")) {
+        return { error: "Request already pending" };
+      }
+      return { error: error?.message ?? null };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Could not send friend request";
+      return { error: message };
     }
   }
 
