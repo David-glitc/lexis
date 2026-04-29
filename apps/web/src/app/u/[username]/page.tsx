@@ -58,7 +58,9 @@ export default function PublicProfilePage() {
               <UserAvatar avatarId={profile.avatar_url} displayName={profile.display_name} size={56} />
               <div>
                 <h2 className="text-xl font-display font-bold text-white">{profile.display_name}</h2>
-                <p className="text-xs text-zinc-500">@{profile.username}</p>
+                <Link href={`/u/${profile.username}`} className="text-xs text-zinc-500 hover:text-[#6abf5e] transition-colors">
+                  @{profile.username}
+                </Link>
                 <p className="text-xs text-zinc-500">{profile.ranking_tier.toUpperCase()}</p>
               </div>
             </div>

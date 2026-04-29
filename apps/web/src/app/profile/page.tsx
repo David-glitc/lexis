@@ -106,6 +106,49 @@ function RecentHistory({ history }: { history: PuzzleResult[] }) {
   );
 }
 
+type AnagramRoundHistoryEntry = {
+  created_at: string;
+  durationSeconds: number;
+  rack: string;
+  totalScore: number;
+  foundCount: number;
+  topWords: string[];
+};
+
+function RecentAnagramRounds({ rounds }: { rounds: AnagramRoundHistoryEntry[] }) {
+  if (!rounds.length) return <p className="text-zinc-500 text-sm">No Anagram rounds completed yet.</p>;
+
+  return (
+    <div className="space-y-2">
+      <div className="text-sm text-zinc-400 mb-2">Recent Anagram Rounds</div>
+      {rounds.map((r, idx) => (
+        <div key={`${r.created_at}-${idx}`} className="rounded-lg bg-zinc-900 border border-zinc-800 p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <span className="text-xs text-zinc-600 font-mono">
+                {r.durationSeconds}s · {r.rack.toUpperCase()}
+              </span>
+              <div className="text-sm text-white font-mono mt-1">
+                {r.totalScore} pts · {r.foundCount} words
+              </div>
+            </div>
+            <div className="text-xs text-emerald-400 font-mono">{new Date(r.created_at).toLocaleDateString()}</div>
+          </div>
+          {r.topWords.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {r.topWords.slice(0, 6).map((w) => (
+                <span key={w} className="text-[10px] px-2 py-1 rounded-full border border-white/10 bg-white/[0.04] text-zinc-200 font-mono">
+                  {w.toUpperCase()}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function ProfilePage() {
   const { user, loading: authLoading } = useAuth();
   const userId = user?.id ?? null;
@@ -119,12 +162,13 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [lp, setLp] = useState(0);
   const [anagramPoints, setAnagramPoints] = useState(0);
+  const [anagramRounds, setAnagramRounds] = useState<AnagramRoundHistoryEntry[]>([]);
   const [localStats, setLocalStats] = useState({ played: 0, won: 0, winRate: 0, streak: 0, maxStreak: 0, averageAttempts: 0 });
   const [history, setHistory] = useState<PuzzleResult[]>([]);
   const lastLoadedUserIdRef = useRef<string | null>(null);
 
   const loadProfileData = useCallback(async (activeUserId: string, activeUserEmail: string | null | undefined) => {
-    const [profileResult, stats, historyResult] = await Promise.all([
+    const [profileResult, stats, historyResult, anagramRoundHistory] = await Promise.all([
       profileService.getProfile(activeUserId).then(async (existingProfile) => {
         if (existingProfile) return existingProfile;
         return profileService.createProfile(
@@ -142,11 +186,12 @@ export default function ProfilePage() {
         averageAttempts: 0,
       })),
       puzzleService.getHistory(activeUserId).catch(() => [] as PuzzleResult[]),
+      pointsService.getAnagramRoundHistory(activeUserId, 6).catch(() => [] as AnagramRoundHistoryEntry[]),
     ]);
 
     const points = await pointsService.getPoints(activeUserId);
     const anagramOnlyPoints = await pointsService.getAnagramPoints(activeUserId);
-    return { profileResult, stats, historyResult, points, anagramOnlyPoints };
+    return { profileResult, stats, historyResult, points, anagramOnlyPoints, anagramRoundHistory };
   }, []);
 
   useEffect(() => {
@@ -164,12 +209,13 @@ export default function ProfilePage() {
     lastLoadedUserIdRef.current = userId;
 
     loadProfileData(userId, userEmail)
-      .then(({ profileResult, stats, historyResult, points, anagramOnlyPoints }) => {
+      .then(({ profileResult, stats, historyResult, points, anagramOnlyPoints, anagramRoundHistory }) => {
         if (!active) return;
         setLocalStats(stats);
         setHistory(historyResult);
         setLp(points);
         setAnagramPoints(anagramOnlyPoints);
+        setAnagramRounds(anagramRoundHistory);
         if (profileResult) {
           setProfile(profileResult);
           setDisplayName(profileResult.display_name);
@@ -298,7 +344,11 @@ export default function ProfilePage() {
           ) : (
             <>
               <h1 className="text-xl text-white font-display font-bold">{profile?.display_name ?? user.email?.split("@")[0]}</h1>
-              {profile?.username && <p className="text-xs text-zinc-500 mt-0.5">@{profile.username}</p>}
+              {profile?.username && (
+                <Link href={`/u/${profile.username}`} className="text-xs text-zinc-500 mt-0.5 inline-block hover:text-[#6abf5e] transition-colors">
+                  @{profile.username}
+                </Link>
+              )}
               <p className="text-xs text-zinc-500 mt-0.5 mb-1">{user.email}</p>
               {profile?.bio && <p className="text-sm text-zinc-400 mt-1 mb-2 max-w-xs mx-auto">{profile.bio}</p>}
               <div className="flex items-center justify-center gap-3 mt-2 mb-2">
@@ -335,6 +385,7 @@ export default function ProfilePage() {
         </div>
 
         <RecentHistory history={history} />
+        <RecentAnagramRounds rounds={anagramRounds} />
       </div>
     </AppShell>
   );

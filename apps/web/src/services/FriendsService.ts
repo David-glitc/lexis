@@ -15,6 +15,7 @@ export interface FriendWithProfile {
   friendship_id: string;
   friend_id: string;
   display_name: string;
+  username: string | null;
   email: string;
   avatar_url: string | null;
   ranking_tier: string;
@@ -157,13 +158,13 @@ export class FriendsService {
   async getFriendsList(userId: string): Promise<FriendWithProfile[]> {
     const { data: sent } = await this.client
       .from("friendships")
-      .select("id, requester_id, receiver_id, status, profiles!friendships_receiver_id_fkey(id, display_name, email, avatar_url, ranking_tier, puzzles_won, current_streak)")
+      .select("id, requester_id, receiver_id, status, profiles!friendships_receiver_id_fkey(id, display_name, username, email, avatar_url, ranking_tier, puzzles_won, current_streak)")
       .eq("requester_id", userId)
       .eq("status", "accepted");
 
     const { data: received } = await this.client
       .from("friendships")
-      .select("id, requester_id, receiver_id, status, profiles!friendships_requester_id_fkey(id, display_name, email, avatar_url, ranking_tier, puzzles_won, current_streak)")
+      .select("id, requester_id, receiver_id, status, profiles!friendships_requester_id_fkey(id, display_name, username, email, avatar_url, ranking_tier, puzzles_won, current_streak)")
       .eq("receiver_id", userId)
       .eq("status", "accepted");
 
@@ -177,6 +178,7 @@ export class FriendsService {
             friendship_id: row.id,
             friend_id: p.id,
             display_name: p.display_name,
+            username: p.username ?? null,
             email: p.email,
             avatar_url: p.avatar_url,
             ranking_tier: p.ranking_tier,
@@ -197,6 +199,7 @@ export class FriendsService {
             friendship_id: row.id,
             friend_id: p.id,
             display_name: p.display_name,
+            username: p.username ?? null,
             email: p.email,
             avatar_url: p.avatar_url,
             ranking_tier: p.ranking_tier,
@@ -215,7 +218,7 @@ export class FriendsService {
   async getPendingRequests(userId: string): Promise<FriendWithProfile[]> {
     const { data } = await this.client
       .from("friendships")
-      .select("id, requester_id, receiver_id, status, profiles!friendships_requester_id_fkey(id, display_name, email, avatar_url, ranking_tier, puzzles_won, current_streak)")
+      .select("id, requester_id, receiver_id, status, profiles!friendships_requester_id_fkey(id, display_name, username, email, avatar_url, ranking_tier, puzzles_won, current_streak)")
       .eq("receiver_id", userId)
       .eq("status", "pending");
 
@@ -227,6 +230,7 @@ export class FriendsService {
         friendship_id: row.id,
         friend_id: p?.id ?? row.requester_id,
         display_name: p?.display_name ?? "Unknown",
+        username: p?.username ?? null,
         email: p?.email ?? "",
         avatar_url: p?.avatar_url ?? null,
         ranking_tier: p?.ranking_tier ?? "unranked",

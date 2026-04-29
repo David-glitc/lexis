@@ -280,7 +280,9 @@ export default function SettingsPage() {
                   <p className="text-xs text-red-400 font-body mt-1">3-20 characters, a-z, 0-9, underscores only</p>
                 )}
                 {profile?.username && username !== profile.username && (
-                  <p className="text-[11px] text-zinc-600 font-mono mt-1">was: @{profile.username}</p>
+                  <p className="text-[11px] text-zinc-600 font-mono mt-1">
+                    was: <Link href={`/u/${profile.username}`} className="hover:text-[#6abf5e] transition-colors">@{profile.username}</Link>
+                  </p>
                 )}
               </div>
               <div>
@@ -320,7 +322,9 @@ export default function SettingsPage() {
                     {profile.display_name || "No name set"}
                   </p>
                   {profile.username && (
-                    <p className="text-xs font-mono text-zinc-500">@{profile.username}</p>
+                    <Link href={`/u/${profile.username}`} className="text-xs font-mono text-zinc-500 hover:text-[#6abf5e] transition-colors">
+                      @{profile.username}
+                    </Link>
                   )}
                 </div>
                 <span className="rounded-full bg-white/[0.06] border border-white/[0.08] px-2.5 py-1 text-[10px] font-mono text-zinc-400 uppercase">

@@ -231,6 +231,102 @@ export class PointsService {
     }
   }
 
+  async getAnagramRoundHistory(
+    userId: string,
+    limit = 8
+  ): Promise<
+    Array<{
+      created_at: string;
+      durationSeconds: number;
+      rack: string;
+      totalScore: number;
+      foundCount: number;
+      topWords: string[];
+    }>
+  > {
+    try {
+      const { data, error } = await this.client
+        .from("points_ledger")
+        .select("created_at, metadata")
+        .eq("user_id", userId)
+        .eq("reason", "anagram_round_completed")
+        .order("created_at", { ascending: false })
+        .limit(limit);
+
+      if (error || !data) return [];
+
+      return (data ?? []).map((row: any) => {
+        const meta = (row?.metadata ?? {}) as any;
+        const durationSeconds = Number(meta.durationSeconds ?? 0) || 0;
+        const rack = typeof meta.rack === "string" ? meta.rack : "";
+        const totalScore = Number(meta.totalScore ?? 0) || 0;
+        const foundCount = Number(meta.foundCount ?? 0) || 0;
+        const topWords = Array.isArray(meta.topWords) ? (meta.topWords as any[]).map(String).slice(0, 8) : [];
+
+        return {
+          created_at: String(row.created_at ?? ""),
+          durationSeconds,
+          rack,
+          totalScore,
+          foundCount,
+          topWords,
+        };
+      });
+    } catch {
+      return [];
+    }
+  }
+
+  async recordAnagramRoundCompleted(
+    userId: string,
+    round: {
+      startedAt: number;
+      durationSeconds: number;
+      rack: string;
+      foundWords: string[];
+      totalScore: number;
+    }
+  ): Promise<{ error: string | null }> {
+    try {
+      const idempotencyKey = `${userId}:anagram_round:${round.startedAt}`;
+
+      const { data: existing } = await this.client
+        .from("points_ledger")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("reason", "anagram_round_completed")
+        .eq("metadata->>idempotency_key", idempotencyKey)
+        .limit(1)
+        .maybeSingle();
+
+      if (existing) return { error: null };
+
+      const topWords = (round.foundWords ?? []).slice(0, 8);
+      const foundCount = (round.foundWords ?? []).length;
+
+      const { error } = await this.client.from("points_ledger").insert({
+        user_id: userId,
+        amount: 0,
+        reason: "anagram_round_completed",
+        metadata: {
+          idempotency_key: idempotencyKey,
+          mode: "anagram",
+          durationSeconds: round.durationSeconds,
+          rack: round.rack,
+          roundStartedAt: round.startedAt,
+          totalScore: round.totalScore,
+          foundCount,
+          topWords,
+        },
+        created_at: new Date().toISOString(),
+      });
+
+      return { error: error?.message ?? null };
+    } catch {
+      return { error: "DB unavailable" };
+    }
+  }
+
   async getPointsHistory(userId: string, limit = 50): Promise<PointsLedgerEntry[]> {
     try {
       const { data } = await this.client

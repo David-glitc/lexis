@@ -68,7 +68,7 @@ function LeaderboardRow({
   isCurrentUser: boolean;
 }) {
   const topBorder = RANK_BORDER[rank] ?? "";
-  const profileHref = entry.username ? `/u/${entry.username}` : `/profile`;
+  const profileHref = entry.username ? `/u/${entry.username}` : isCurrentUser ? `/profile` : `/settings`;
   return (
     <Link
       href={profileHref}
@@ -95,7 +95,9 @@ function LeaderboardRow({
           </span>
           <TierBadge tier={entry.ranking_tier} />
         </div>
-        <span className="text-xs text-zinc-500 font-body">@{entry.username}</span>
+        {entry.username ? (
+          <span className="text-xs text-zinc-500 font-body">@{entry.username}</span>
+        ) : null}
       </div>
 
       <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -114,9 +116,11 @@ function LeaderboardRow({
 function UserRankCard({
   entry,
   rank,
+  anagramPoints,
 }: {
   entry: LeaderboardEntry;
   rank: number;
+  anagramPoints: number;
 }) {
   return (
     <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] p-4 mb-4">
@@ -125,7 +129,7 @@ function UserRankCard({
         <div className="text-2xl font-display font-bold text-white">#{rank}</div>
         <div className="flex-1 min-w-0">
           <div className="text-sm text-white font-body font-medium truncate">{entry.display_name}</div>
-          <div className="text-xs text-zinc-500 font-body">@{entry.username}</div>
+          {entry.username ? <div className="text-xs text-zinc-500 font-body">@{entry.username}</div> : null}
         </div>
         <div className="flex items-center gap-1.5">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-yellow-400">
@@ -138,6 +142,10 @@ function UserRankCard({
         </div>
         <TierBadge tier={entry.ranking_tier} />
       </div>
+      <div className="mt-3 text-xs text-zinc-200 font-mono flex items-center justify-between">
+        <span className="text-zinc-400">Anagram Points</span>
+        <span className="text-[#6abf5e] tabular-nums">{formatPoints(anagramPoints)}</span>
+      </div>
     </div>
   );
 }
@@ -149,6 +157,7 @@ export default function LeaderboardPage() {
   const [dailySpeedEntries, setDailySpeedEntries] = useState<Array<{ user_id: string; username: string; display_name: string; attempts: number; time_ms: number }>>([]);
   const [infiniteSpeedEntries, setInfiniteSpeedEntries] = useState<Array<{ user_id: string; username: string; display_name: string; weighted_score: number; runs: number }>>([]);
   const [userRank, setUserRank] = useState<number | null>(null);
+  const [userAnagramPoints, setUserAnagramPoints] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const requestIdRef = useRef(0);
@@ -184,6 +193,10 @@ export default function LeaderboardPage() {
         const rank = await pointsService.getUserRank(userId);
         if (requestId !== requestIdRef.current) return;
         setUserRank(rank);
+
+        const anagramPoints = await pointsService.getAnagramPoints(userId);
+        if (requestId !== requestIdRef.current) return;
+        setUserAnagramPoints(anagramPoints);
       }
     } finally {
       if (requestId === requestIdRef.current) {
@@ -269,20 +282,36 @@ export default function LeaderboardPage() {
             </div>
           ) : (
             <div className="space-y-2">
-              {dailySpeedEntries.map((entry, i) => (
-                <div key={`${entry.user_id}-${i}`} className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.03] px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    <RankNumber rank={i + 1} />
-                    <div>
-                      <div className="text-sm text-white font-body">{entry.display_name}</div>
-                      <div className="text-xs text-zinc-500 font-body">@{entry.username}</div>
+              {dailySpeedEntries.map((entry, i) => {
+                const rowContent = (
+                  <>
+                    <div className="flex items-center gap-3">
+                      <RankNumber rank={i + 1} />
+                      <div>
+                        <div className="text-sm text-white font-body">{entry.display_name}</div>
+                        {entry.username ? <div className="text-xs text-zinc-500 font-body">@{entry.username}</div> : null}
+                      </div>
                     </div>
+                    <div className="text-xs text-zinc-300 font-mono">
+                      {entry.attempts} guesses · {Math.floor(entry.time_ms / 1000)}s
+                    </div>
+                  </>
+                );
+
+                return entry.username ? (
+                  <Link
+                    key={`${entry.user_id}-${i}`}
+                    href={`/u/${entry.username}`}
+                    className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.03] px-4 py-3 transition-colors hover:border-white/10"
+                  >
+                    {rowContent}
+                  </Link>
+                ) : (
+                  <div key={`${entry.user_id}-${i}`} className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.03] px-4 py-3">
+                    {rowContent}
                   </div>
-                  <div className="text-xs text-zinc-300 font-mono">
-                    {entry.attempts} guesses · {Math.floor(entry.time_ms / 1000)}s
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )
         ) : tab === "infinite_speed" ? (
@@ -295,20 +324,36 @@ export default function LeaderboardPage() {
             </div>
           ) : (
             <div className="space-y-2">
-              {infiniteSpeedEntries.map((entry, i) => (
-                <div key={`${entry.user_id}-${i}`} className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.03] px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    <RankNumber rank={i + 1} />
-                    <div>
-                      <div className="text-sm text-white font-body">{entry.display_name}</div>
-                      <div className="text-xs text-zinc-500 font-body">@{entry.username}</div>
+              {infiniteSpeedEntries.map((entry, i) => {
+                const rowContent = (
+                  <>
+                    <div className="flex items-center gap-3">
+                      <RankNumber rank={i + 1} />
+                      <div>
+                        <div className="text-sm text-white font-body">{entry.display_name}</div>
+                        {entry.username ? <div className="text-xs text-zinc-500 font-body">@{entry.username}</div> : null}
+                      </div>
                     </div>
+                    <div className="text-xs text-zinc-300 font-mono">
+                      {Math.round(entry.weighted_score)} pts · {entry.runs} runs
+                    </div>
+                  </>
+                );
+
+                return entry.username ? (
+                  <Link
+                    key={`${entry.user_id}-${i}`}
+                    href={`/u/${entry.username}`}
+                    className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.03] px-4 py-3 transition-colors hover:border-white/10"
+                  >
+                    {rowContent}
+                  </Link>
+                ) : (
+                  <div key={`${entry.user_id}-${i}`} className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.03] px-4 py-3">
+                    {rowContent}
                   </div>
-                  <div className="text-xs text-zinc-300 font-mono">
-                    {Math.round(entry.weighted_score)} pts · {entry.runs} runs
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )
         ) : entries.length === 0 ? (
@@ -323,7 +368,7 @@ export default function LeaderboardPage() {
         ) : (
           <>
             {currentUserEntry && userRank !== null && (
-              <UserRankCard entry={currentUserEntry} rank={userRank} />
+              <UserRankCard entry={currentUserEntry} rank={userRank} anagramPoints={userAnagramPoints} />
             )}
 
             <div className="space-y-2">

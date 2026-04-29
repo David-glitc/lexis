@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { AppShell } from "../../../components/layout/app-shell";
 import { Button } from "../../../components/ui/button";
@@ -32,6 +32,10 @@ const WHEEL_SIZE_PX = 320;
 const NODE_SIZE_PX = 52;
 const WHEEL_RADIUS_PX = 125;
 
+function createDefaultLetterOrder(rack: string): number[] {
+  return rack.split("").map((_, index) => index);
+}
+
 function getNodePosition(index: number, count: number): { x: number; y: number } {
   const cx = WHEEL_SIZE_PX / 2;
   const cy = WHEEL_SIZE_PX / 2;
@@ -61,10 +65,25 @@ function AnagramArenaClientPage() {
   const userIdRef = useRef<string | null>(user?.id ?? null);
   const lastLeftRef = useRef(secondsLeft);
   const lastEnsuredProfileIdRef = useRef<string | null>(null);
-  const pointerDownRef = useRef(false);
 
   const [activePath, setActivePath] = useState<number[]>([]);
   const activePathRef = useRef<number[]>(activePath);
+
+  const [displayWords, setDisplayWords] = useState<string[]>([]);
+  const displayWordsRef = useRef<string[]>(displayWords);
+  const [letterOrder, setLetterOrder] = useState<number[]>(() => createDefaultLetterOrder(round.rack));
+
+  const wheelRef = useRef<HTMLDivElement | null>(null);
+
+  const draggingRef = useRef(false);
+  const dragPointerIdRef = useRef<number | null>(null);
+  const lastNearestIndexRef = useRef<number | null>(null);
+
+  const rackLetters = useMemo(() => round.rack.split(""), [round.rack]);
+  const displayedRackLetters = useMemo(
+    () => letterOrder.map((index) => rackLetters[index] ?? ""),
+    [letterOrder, rackLetters]
+  );
 
   useEffect(() => {
     userIdRef.current = user?.id ?? null;
@@ -78,6 +97,10 @@ function AnagramArenaClientPage() {
     activePathRef.current = activePath;
   }, [activePath]);
 
+  useEffect(() => {
+    displayWordsRef.current = displayWords;
+  }, [displayWords]);
+
   // If the user changes timer (via query params), start a fresh round.
   useEffect(() => {
     const nextRound = createAnagramRound(randomRack(), durationSeconds);
@@ -86,6 +109,8 @@ function AnagramArenaClientPage() {
     setSecondsLeft(nextRound.durationSeconds);
     lastLeftRef.current = nextRound.durationSeconds;
     setActivePath([]);
+    setDisplayWords([]);
+    setLetterOrder(createDefaultLetterOrder(nextRound.rack));
   }, [durationSeconds]);
 
   useEffect(() => {
@@ -106,6 +131,21 @@ function AnagramArenaClientPage() {
   }, [user]);
 
   useEffect(() => {
+    // Maintain display order within the session: new words append at the end unless the user shuffles.
+    setDisplayWords((prev) => {
+      const existing = new Set(prev);
+      const next = [...prev];
+      for (const w of round.foundWords) {
+        if (!existing.has(w)) {
+          existing.add(w);
+          next.push(w);
+        }
+      }
+      return next;
+    });
+  }, [round.foundWords]);
+
+  useEffect(() => {
     const interval = setInterval(() => {
       const currentRound = roundRef.current;
       const left = getRoundSecondsRemaining(currentRound);
@@ -116,18 +156,73 @@ function AnagramArenaClientPage() {
       }
 
       if (left === 0 && !currentRound.completed) {
-        pointerDownRef.current = false;
+        draggingRef.current = false;
+        dragPointerIdRef.current = null;
+        lastNearestIndexRef.current = null;
         setActivePath([]);
         completeRound(currentRound);
         setRound({ ...currentRound });
+
+        const userId = userIdRef.current;
+        if (userId) {
+          pointsService
+            .recordAnagramRoundCompleted(userId, {
+              startedAt: currentRound.startedAt,
+              durationSeconds: currentRound.durationSeconds,
+              rack: currentRound.rack,
+              foundWords: displayWordsRef.current,
+              totalScore: currentRound.score,
+            })
+            .catch(() => {});
+        }
       }
     }, 250);
     return () => clearInterval(interval);
   }, []);
 
+  const formedWord = useMemo(() => {
+    if (!activePath.length) return "";
+    return activePath.map((i) => displayedRackLetters[i] ?? "").join("");
+  }, [activePath, displayedRackLetters]);
+
+  const shuffleLetterOrder = useCallback(() => {
+    if (round.completed) return;
+    setLetterOrder((prev) => {
+      if (prev.length < 2) return prev;
+      const next = [...prev];
+      for (let i = next.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [next[i], next[j]] = [next[j], next[i]];
+      }
+      return next;
+    });
+  }, [round.completed]);
+
+  const clearPath = useCallback(() => {
+    draggingRef.current = false;
+    dragPointerIdRef.current = null;
+    lastNearestIndexRef.current = null;
+    setActivePath([]);
+  }, []);
+
+  const startNextRound = useCallback(() => {
+    if (!round.completed) return;
+    setActivePath([]);
+    setDisplayWords([]);
+    const nextRound = createAnagramRound(randomRack(), durationSeconds);
+    setRound(nextRound);
+    setMessage("");
+    setSecondsLeft(nextRound.durationSeconds);
+    lastLeftRef.current = nextRound.durationSeconds;
+    setLetterOrder(createDefaultLetterOrder(nextRound.rack));
+  }, [durationSeconds, round.completed]);
+
   const finalizeWord = useCallback(() => {
-    if (!pointerDownRef.current) return;
-    pointerDownRef.current = false;
+    if (!draggingRef.current) return;
+
+    draggingRef.current = false;
+    dragPointerIdRef.current = null;
+    lastNearestIndexRef.current = null;
 
     const currentRound = roundRef.current;
     if (currentRound.completed) {
@@ -139,7 +234,7 @@ function AnagramArenaClientPage() {
     setActivePath([]);
     if (!indices.length) return;
 
-    const letters = currentRound.rack.split("");
+    const letters = displayedRackLetters;
     const word = indices.map((i) => letters[i] ?? "").join("");
 
     const result = submitAnagramWord(currentRound, word);
@@ -156,6 +251,8 @@ function AnagramArenaClientPage() {
             mode: "anagram",
             durationSeconds: currentRound.durationSeconds,
             rack: currentRound.rack,
+            roundStartedAt: currentRound.startedAt,
+            word: result.normalizedWord,
             idempotency_key: idempotencyKey,
           })
           .catch(() => {});
@@ -175,61 +272,119 @@ function AnagramArenaClientPage() {
       duplicate: "You already found that word.",
     };
     setMessage(reasonMap[result.reason ?? ""] ?? "Word rejected.");
-  }, [pointsService]);
+  }, [displayedRackLetters]);
 
   useEffect(() => {
-    function onUp() {
+    function onPointerUp(e: PointerEvent) {
+      if (!draggingRef.current) return;
+      if (dragPointerIdRef.current !== e.pointerId) return;
       finalizeWord();
     }
-    window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onUp);
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerUp);
     return () => {
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
     };
   }, [finalizeWord]);
 
-  const rackLetters = useMemo(() => round.rack.split(""), [round.rack]);
+  useEffect(() => {
+    const thresholdPx = NODE_SIZE_PX / 2 + 10;
+    const thresholdSq = thresholdPx * thresholdPx;
 
-  const sortedWords = useMemo(
-    () => [...round.foundWords].sort((a, b) => b.length - a.length || a.localeCompare(b)),
-    [round.foundWords]
+    function findNearestIndex(x: number, y: number): number | null {
+      let nearest: number | null = null;
+      let bestDist = Infinity;
+      for (let i = 0; i < displayedRackLetters.length; i += 1) {
+        const pos = getNodePosition(i, displayedRackLetters.length);
+        const dx = x - pos.x;
+        const dy = y - pos.y;
+        const dist = dx * dx + dy * dy;
+        if (dist <= thresholdSq && dist < bestDist) {
+          bestDist = dist;
+          nearest = i;
+        }
+      }
+      return nearest;
+    }
+
+    function isNearIndex(index: number, x: number, y: number): boolean {
+      const pos = getNodePosition(index, displayedRackLetters.length);
+      const dx = x - pos.x;
+      const dy = y - pos.y;
+      return dx * dx + dy * dy <= thresholdSq;
+    }
+
+    function onPointerMove(e: PointerEvent) {
+      if (!draggingRef.current) return;
+      if (dragPointerIdRef.current !== e.pointerId) return;
+
+      const wheelEl = wheelRef.current;
+      if (!wheelEl) return;
+
+      const rect = wheelEl.getBoundingClientRect();
+      const xLocal = e.clientX - rect.left;
+      const yLocal = e.clientY - rect.top;
+
+      if (roundRef.current.completed) return;
+
+      const path = activePathRef.current;
+      if (path.length) {
+        const lastIndex = path[path.length - 1];
+        if (!isNearIndex(lastIndex, xLocal, yLocal)) {
+          setActivePath((prev) => prev.slice(0, -1));
+          return;
+        }
+      }
+
+      const nearestIndex = findNearestIndex(xLocal, yLocal);
+      if (nearestIndex === null) return;
+
+      if (nearestIndex === lastNearestIndexRef.current) return;
+
+      if (path.includes(nearestIndex)) {
+        lastNearestIndexRef.current = nearestIndex;
+        return;
+      }
+
+      setActivePath((prev) => [...prev, nearestIndex]);
+      lastNearestIndexRef.current = nearestIndex;
+    }
+
+    window.addEventListener("pointermove", onPointerMove, { passive: true } as any);
+    return () => window.removeEventListener("pointermove", onPointerMove as any);
+  }, [displayedRackLetters.length]);
+
+  const onPointerDownNode = useCallback(
+    (index: number, e: ReactPointerEvent<HTMLButtonElement>) => {
+      if (round.completed) return;
+      draggingRef.current = true;
+      dragPointerIdRef.current = e.pointerId;
+      lastNearestIndexRef.current = index;
+
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {
+        // Pointer capture may not exist on some environments; fallback to window handlers.
+      }
+
+      setActivePath([index]);
+      setMessage("");
+    },
+    [round.completed]
   );
 
-  const clearPath = () => {
-    pointerDownRef.current = false;
-    setActivePath([]);
-  };
-
-  const reset = () => {
-    pointerDownRef.current = false;
-    setActivePath([]);
-    const nextRound = createAnagramRound(randomRack(), durationSeconds);
-    setRound(nextRound);
-    setMessage("");
-    setSecondsLeft(nextRound.durationSeconds);
-    lastLeftRef.current = nextRound.durationSeconds;
-  };
-
-  const formedWord = useMemo(() => {
-    if (!activePath.length) return "";
-    return activePath.map((i) => rackLetters[i] ?? "").join("");
-  }, [activePath, rackLetters]);
-
-  const onPointerDownNode = (index: number) => {
-    if (round.completed) return;
-    pointerDownRef.current = true;
-    setActivePath([index]);
-  };
-
-  const onPointerEnterNode = (index: number, buttons: number) => {
-    if (!pointerDownRef.current) return;
-    if (buttons !== 1) return;
-    setActivePath((prev) => {
-      if (prev.includes(index)) return prev;
-      return [...prev, index];
-    });
-  };
+  const activeLines = useMemo(() => {
+    const lines: Array<{ from: number; to: number; key: string }> = [];
+    for (let i = 1; i < activePath.length; i += 1) {
+      lines.push({
+        from: activePath[i - 1],
+        to: activePath[i],
+        key: `${activePath[i - 1]}-${activePath[i]}-${i}`,
+      });
+    }
+    return lines;
+  }, [activePath]);
 
   return (
     <AppShell
@@ -264,6 +419,7 @@ function AnagramArenaClientPage() {
 
             <div className="relative mx-auto w-full flex items-center justify-center">
               <div
+                ref={wheelRef}
                 className="relative rounded-2xl border border-white/[0.06] bg-black/30"
                 style={{ width: WHEEL_SIZE_PX, height: WHEEL_SIZE_PX }}
               >
@@ -273,13 +429,12 @@ function AnagramArenaClientPage() {
                   height={WHEEL_SIZE_PX}
                   viewBox={`0 0 ${WHEEL_SIZE_PX} ${WHEEL_SIZE_PX}`}
                 >
-                  {activePath.slice(1).map((idx, i) => {
-                    const prevIdx = activePath[i] ?? idx;
-                    const from = getNodePosition(prevIdx, rackLetters.length);
-                    const to = getNodePosition(idx, rackLetters.length);
+                  {activeLines.map((l) => {
+                    const from = getNodePosition(l.from, displayedRackLetters.length);
+                    const to = getNodePosition(l.to, displayedRackLetters.length);
                     return (
                       <line
-                        key={`${prevIdx}-${idx}-${i}`}
+                        key={l.key}
                         x1={from.x}
                         y1={from.y}
                         x2={to.x}
@@ -292,8 +447,8 @@ function AnagramArenaClientPage() {
                   })}
                 </svg>
 
-                {rackLetters.map((letter, index) => {
-                  const pos = getNodePosition(index, rackLetters.length);
+                {displayedRackLetters.map((letter, index) => {
+                  const pos = getNodePosition(index, displayedRackLetters.length);
                   const active = activePath.includes(index);
 
                   return (
@@ -308,11 +463,11 @@ function AnagramArenaClientPage() {
                         top: pos.y,
                         width: NODE_SIZE_PX,
                         height: NODE_SIZE_PX,
-                        transform: "translate(-50%, -50%)",
+                        transform: `translate(-50%, -50%) scale(${active ? 1.1 : 1})`,
                         border: active ? "1px solid #6abf5e" : "1px solid rgba(255,255,255,0.08)",
+                        transition: "transform 120ms ease, background-color 120ms ease, border-color 120ms ease",
                       }}
-                      onPointerDown={() => onPointerDownNode(index)}
-                      onPointerEnter={(e) => onPointerEnterNode(index, e.buttons)}
+                      onPointerDown={(e) => onPointerDownNode(index, e)}
                       disabled={round.completed}
                     >
                       <span className="font-display text-sm font-bold">{letter.toUpperCase()}</span>
@@ -337,7 +492,7 @@ function AnagramArenaClientPage() {
               <Button size="sm" variant="secondary" onClick={clearPath} disabled={round.completed || activePath.length === 0}>
                 Clear
               </Button>
-              <Button size="sm" onClick={reset}>
+              <Button size="sm" onClick={shuffleLetterOrder} disabled={round.completed || displayedRackLetters.length < 2}>
                 Shuffle
               </Button>
             </div>
@@ -347,17 +502,17 @@ function AnagramArenaClientPage() {
 
           <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4">
             <div className="flex items-center justify-between mb-2">
-              <div className="text-sm text-zinc-300">Found Words ({sortedWords.length})</div>
-              <Button size="sm" variant="ghost" onClick={reset}>
+              <div className="text-sm text-zinc-300">Found Words ({displayWords.length})</div>
+              <Button size="sm" variant="ghost" onClick={startNextRound} disabled={!round.completed}>
                 New Round
               </Button>
             </div>
 
-            {sortedWords.length === 0 ? (
+            {displayWords.length === 0 ? (
               <p className="text-xs text-zinc-500">No words found yet.</p>
             ) : (
               <div className="space-y-2">
-                {sortedWords.map((word) => {
+                {displayWords.map((word) => {
                   const points = computeAnagramWordPoints(word, round.durationSeconds);
                   return (
                     <div

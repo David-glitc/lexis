@@ -6,6 +6,11 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Logo } from "../ui/lexis-logo";
 import { useAuth } from "../../providers/AuthProvider";
+import { createClient } from "../../utils/supabase/client";
+import { ProfileService } from "../../services/ProfileService";
+
+const supabase = createClient();
+const profileService = new ProfileService(supabase);
 
 interface AppShellProps {
   header?: ReactNode;
@@ -117,9 +122,14 @@ export function AppShell({ header, footer, children, sidebar = true }: AppShellP
   const { user } = useAuth();
   const [moreOpen, setMoreOpen] = useState(false);
   const lastCtrlShiftL = useRef(0);
+  const [profileSetupNeeds, setProfileSetupNeeds] = useState(false);
+  const [profileSetupChecked, setProfileSetupChecked] = useState(false);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setMoreOpen(false);
+      }
       if (e.ctrlKey && e.shiftKey && e.key === "L") {
         lastCtrlShiftL.current = Date.now();
         return;
@@ -132,6 +142,49 @@ export function AppShell({ header, footer, children, sidebar = true }: AppShellP
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [router]);
+
+  useEffect(() => {
+    setMoreOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!moreOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [moreOpen]);
+
+  useEffect(() => {
+    if (!user) {
+      setProfileSetupNeeds(false);
+      setProfileSetupChecked(true);
+      return;
+    }
+
+    let active = true;
+    setProfileSetupChecked(false);
+
+    profileService
+      .getProfile(user.id)
+      .then((p) => {
+        if (!active) return;
+        const needsUsername = !p?.username;
+        const needsAvatar = !p?.avatar_url;
+        setProfileSetupNeeds(needsUsername || needsAvatar);
+        setProfileSetupChecked(true);
+      })
+      .catch(() => {
+        if (!active) return;
+        setProfileSetupNeeds(false);
+        setProfileSetupChecked(true);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [user?.id]);
 
   const active = (href: string) => pathname.startsWith(href);
   const moreActive = MORE_LINKS.some((l) => active(l.href));
@@ -181,7 +234,25 @@ export function AppShell({ header, footer, children, sidebar = true }: AppShellP
           </header>
         )}
 
-        <main className="relative z-10 mx-auto max-w-3xl px-5 pb-6 pt-4">{children}</main>
+        <main className="relative z-10 mx-auto max-w-3xl px-5 pb-6 pt-4">
+          {user && profileSetupChecked && profileSetupNeeds && (
+            <div className="mb-4 rounded-2xl border border-[#6abf5e]/25 bg-[#538d4e]/10 p-4">
+              <div className="text-xs uppercase tracking-wider font-mono text-[#6abf5e]">Complete your profile</div>
+              <div className="mt-1 text-sm text-zinc-200 font-body">
+                Set your <span className="text-white font-semibold">username</span> and <span className="text-white font-semibold">avatar</span> to unlock invites and make your profile discoverable.
+              </div>
+              <div className="mt-3">
+                <Link
+                  href="/settings"
+                  className="inline-flex min-h-[36px] items-center justify-center rounded-full bg-white px-5 py-2 text-xs font-semibold text-black transition-all hover:bg-zinc-100 active:scale-95"
+                >
+                  Finish Setup
+                </Link>
+              </div>
+            </div>
+          )}
+          {children}
+        </main>
 
         {footer && (
           <footer className="z-40 border-t border-white/[0.06] bg-[#060606]/80 px-5 pb-4 pt-3 backdrop-blur-xl md:sticky md:bottom-0">
@@ -189,7 +260,7 @@ export function AppShell({ header, footer, children, sidebar = true }: AppShellP
           </footer>
         )}
 
-        <div className="h-20 md:hidden" />
+        <div className="h-24 md:hidden" />
       </div>
 
       <div
@@ -237,12 +308,13 @@ export function AppShell({ header, footer, children, sidebar = true }: AppShellP
             <Link
               key={item.href}
               href={item.href}
-              className={`relative flex flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2 text-[10px] transition-colors ${
+              aria-current={isActive ? "page" : undefined}
+              className={`relative flex min-h-14 flex-1 flex-col items-center justify-center gap-1 pb-1.5 pt-2 text-[11px] transition-colors ${
                 isActive ? "text-white" : "text-zinc-500"
               }`}
             >
               {isActive && (
-                <span className="absolute top-0 h-1.5 w-1.5 rounded-full bg-[#538d4e]" />
+                <span className="absolute top-0 h-0.5 w-8 rounded-full bg-[#538d4e]" />
               )}
               {isProfile && userInitial ? (
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/10 text-[11px] font-semibold leading-none">
@@ -258,12 +330,14 @@ export function AppShell({ header, footer, children, sidebar = true }: AppShellP
         <button
           type="button"
           onClick={() => setMoreOpen((v) => !v)}
-          className={`relative flex flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2 text-[10px] transition-colors ${
+          aria-expanded={moreOpen}
+          aria-label="Open more navigation links"
+          className={`relative flex min-h-14 flex-1 flex-col items-center justify-center gap-1 pb-1.5 pt-2 text-[11px] transition-colors ${
             moreActive ? "text-white" : "text-zinc-500"
           }`}
         >
           {moreActive && (
-            <span className="absolute top-0 h-1.5 w-1.5 rounded-full bg-[#538d4e]" />
+            <span className="absolute top-0 h-0.5 w-8 rounded-full bg-[#538d4e]" />
           )}
           {icons.more}
           <span>More</span>

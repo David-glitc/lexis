@@ -463,7 +463,14 @@ export default function PlayPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const activeChallengeId = searchParams.get("challenge");
-  const [mode, setMode] = useState<GameMode>("daily");
+  const urlMode = useMemo((): GameMode => {
+    if (activeChallengeId) return "challenge";
+    const raw = searchParams.get("mode");
+    if (raw === "daily" || raw === "infinite" || raw === "speed" || raw === "challenge") return raw;
+    return "daily";
+  }, [activeChallengeId, searchParams]);
+
+  const [mode, setMode] = useState<GameMode>(urlMode);
   const [puzzle, setPuzzle] = useState<MockPuzzle>(() => createDailyPuzzle());
   const [currentGuess, setCurrentGuess] = useState("");
   const [showToast, setShowToast] = useState<string | null>(null);
@@ -490,16 +497,33 @@ export default function PlayPage() {
   const dailyStateLoaded = useRef(false);
   const [sfxEnabled, setSfxEnabled] = useState(true);
   const [sfxVolume, setSfxVolume] = useState(0.5);
+  const playStartTimeRef = useRef<number>(Date.now());
+  const [challengeLoading, setChallengeLoading] = useState(false);
+  const [challengeNotFound, setChallengeNotFound] = useState(false);
+
+  useEffect(() => {
+    setMode(urlMode);
+  }, [urlMode]);
 
   useEffect(() => {
     const challengeId = searchParams.get("challenge");
     if (!challengeId) return;
-    if (!user) return;
+    setMode("challenge");
+    setChallengeNotFound(false);
+    if (!user) {
+      setChallengeLoading(false);
+      return;
+    }
+    setChallengeLoading(true);
     let active = true;
 
     friendsService.getChallengeById(challengeId).then((challenge) => {
       if (!active) return;
-      if (!challenge) return;
+      setChallengeLoading(false);
+      if (!challenge) {
+        setChallengeNotFound(true);
+        return;
+      }
       setMode("challenge");
       const seededPuzzle: MockPuzzle = {
         id: challenge.puzzle_id ?? `challenge-${challenge.id}`,
@@ -510,6 +534,7 @@ export default function PlayPage() {
         invalidGuess: false,
       };
       puzzleStarted.current = false;
+      playStartTimeRef.current = Date.now();
       setPuzzle(seededPuzzle);
     }).catch(() => {});
     return () => {
@@ -519,6 +544,7 @@ export default function PlayPage() {
 
   useEffect(() => {
     if (!user) return;
+    if (activeChallengeId) return;
     if (dailyStateLoaded.current) return;
     let active = true;
     dailyStateLoaded.current = true;
@@ -564,6 +590,7 @@ export default function PlayPage() {
     if (!puzzleStarted.current) {
       puzzleService.startPuzzle(puzzle.id, puzzle.solution);
       puzzleStarted.current = true;
+      playStartTimeRef.current = Date.now();
     }
     if (puzzle.status !== "playing" && puzzle.rows.length > 0) {
       const t = setTimeout(() => setShowStats(true), 500);
@@ -701,7 +728,7 @@ export default function PlayPage() {
                   activeChallengeId,
                   user.id,
                   next.attempts,
-                  Date.now() - speedStartTime.current
+                  Date.now() - playStartTimeRef.current
                 ).catch(() => {});
               }
 
@@ -728,7 +755,7 @@ export default function PlayPage() {
                   activeChallengeId,
                   user.id,
                   next.attempts,
-                  Date.now() - speedStartTime.current
+                  Date.now() - playStartTimeRef.current
                 ).catch(() => {});
               }
 
@@ -813,6 +840,7 @@ export default function PlayPage() {
     setShowCalendar(false);
     setSpeedTimerActive(false);
     setSpeedChallenge(null);
+    playStartTimeRef.current = Date.now();
 
     if (newMode === "speed") {
       const supabase = createClient();
@@ -838,6 +866,7 @@ export default function PlayPage() {
           speedStartTime.current = Date.now();
           setSpeedTimer(0);
           setSpeedTimerActive(true);
+          router.replace("/play?mode=speed");
         } else {
           toast("Speed challenge unavailable");
         }
@@ -848,6 +877,7 @@ export default function PlayPage() {
         setPuzzle(fallback);
         setCurrentGuess("");
         puzzleStarted.current = false;
+        router.replace("/play?mode=speed");
       }
       return;
     }
@@ -859,6 +889,7 @@ export default function PlayPage() {
       setRevealingRow(undefined);
       setBounceRow(undefined);
       puzzleStarted.current = false;
+      router.replace("/play?mode=daily");
       if (user) {
         const dateKey = formatDateKey(new Date());
         puzzleService.getDailyState(user.id, dateKey).then((saved) => {
@@ -882,9 +913,14 @@ export default function PlayPage() {
     setRevealingRow(undefined);
     setBounceRow(undefined);
     puzzleStarted.current = false;
+    router.replace("/play?mode=infinite");
   }
 
   function handleDailyClick() {
+    if (activeChallengeId) {
+      toast("Exit the challenge to play Daily", 1800);
+      return;
+    }
     if (mode === "daily") {
       setShowCalendar((prev) => !prev);
     } else {
@@ -895,6 +931,10 @@ export default function PlayPage() {
 
   function handleModeSwitch(newMode: GameMode) {
     setShowCalendar(false);
+    if (activeChallengeId) {
+      toast("Exit the challenge to switch modes", 1800);
+      return;
+    }
     startNewPuzzle(newMode);
   }
 
@@ -1001,15 +1041,29 @@ export default function PlayPage() {
 
       {/* Mode selector */}
       <div className="flex justify-center flex-wrap gap-2 px-3 sm:px-4 py-2 shrink-0">
+        {activeChallengeId && (
+          <button
+            className={`text-xs px-3 sm:px-4 py-1.5 rounded-full transition-colors font-bold tracking-wider font-body ${
+              mode === "challenge"
+                ? "bg-white text-black ring-2 ring-[#538d4e] ring-offset-1 ring-offset-[#060606]"
+                : "text-zinc-500"
+            }`}
+            onClick={() => setMode("challenge")}
+          >
+            CHALLENGE
+          </button>
+        )}
         <button
           className={`text-xs px-3 sm:px-4 py-1.5 rounded-full transition-colors font-bold tracking-wider font-body ${mode === "daily" ? "bg-white text-black" : "text-zinc-500 hover:text-white"}`}
           onClick={handleDailyClick}
+          disabled={!!activeChallengeId}
         >
           DAILY {getDailyLabel()}
         </button>
         <button
           className={`text-xs px-3 sm:px-4 py-1.5 rounded-full transition-colors font-bold tracking-wider font-body ${mode === "infinite" ? "bg-white text-black" : "text-zinc-500 hover:text-white"}`}
           onClick={() => handleModeSwitch("infinite")}
+          disabled={!!activeChallengeId}
         >
           INFINITE
         </button>
@@ -1020,6 +1074,7 @@ export default function PlayPage() {
               : "text-zinc-500 hover:text-white"
           }`}
           onClick={() => handleModeSwitch("speed")}
+          disabled={!!activeChallengeId}
         >
           {mode === "speed" && (
             <svg className="inline-block w-3 h-3 mr-1 -mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -1035,6 +1090,44 @@ export default function PlayPage() {
           ANAGRAM BLITZ
         </button>
       </div>
+
+      {mode === "challenge" && activeChallengeId && (
+        <div className="px-3 sm:px-4 pb-2 shrink-0">
+          <div className="rounded-xl border border-[#6abf5e]/25 bg-[#538d4e]/10 px-4 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-[10px] uppercase tracking-wider font-mono text-[#6abf5e]">
+                  Challenge Match
+                </div>
+                <div className="text-sm text-zinc-200 font-body">
+                  You’re playing a head-to-head challenge.
+                </div>
+              </div>
+              <button
+                onClick={() => router.replace("/play?mode=daily")}
+                className="rounded-full bg-white px-4 py-2 text-[11px] font-semibold text-black transition-all hover:bg-zinc-100 active:scale-95"
+              >
+                Exit
+              </button>
+            </div>
+            {!user && (
+              <div className="mt-2 text-xs text-zinc-400 font-body">
+                Sign in to load this challenge.
+              </div>
+            )}
+            {user && challengeLoading && (
+              <div className="mt-2 text-xs text-zinc-400 font-body">
+                Loading challenge…
+              </div>
+            )}
+            {user && challengeNotFound && (
+              <div className="mt-2 text-xs text-red-400 font-body">
+                Challenge not found (or you don’t have access).
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {showCalendar && mode === "daily" && (
         <div className="px-4 py-2 shrink-0">

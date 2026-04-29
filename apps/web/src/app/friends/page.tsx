@@ -27,6 +27,7 @@ function SearchIcon() {
 
 function UserCard({
   name,
+  username,
   email,
   tier,
   wins,
@@ -35,6 +36,7 @@ function UserCard({
   online
 }: {
   name: string;
+  username?: string | null;
   email: string;
   tier: string;
   wins: number;
@@ -50,9 +52,21 @@ function UserCard({
             <span className="text-sm text-white font-display font-bold">{(name[0] ?? "?").toUpperCase()}</span>
           </div>
           <div>
-            <div className="text-white text-sm font-body font-medium">{name}</div>
+            {username ? (
+              <Link href={`/u/${username}`} className="text-white text-sm font-body font-medium hover:text-[#6abf5e] transition-colors">
+                {name}
+              </Link>
+            ) : (
+              <div className="text-white text-sm font-body font-medium">{name}</div>
+            )}
             <div className="text-xs text-zinc-500 font-body flex items-center gap-1.5">
-              <span>{email}</span>
+              {username ? (
+                <Link href={`/u/${username}`} className="hover:text-[#6abf5e] transition-colors">
+                  @{username}
+                </Link>
+              ) : (
+                <span>{email}</span>
+              )}
               {online !== undefined && (
                 <span className={`inline-flex items-center gap-1 ${online ? "text-emerald-400" : "text-zinc-600"}`}>
                   <span className={`h-1.5 w-1.5 rounded-full ${online ? "bg-emerald-400" : "bg-zinc-600"}`} />
@@ -62,7 +76,7 @@ function UserCard({
             </div>
           </div>
         </div>
-        <span className="text-[10px] text-zinc-500 capitalize font-mono uppercase tracking-wider">{tier}</span>
+        <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">{tier}</span>
       </div>
       <div className="flex items-center justify-between text-xs text-zinc-500 mb-3 font-mono">
         <span>{wins} wins</span>
@@ -101,6 +115,7 @@ function FriendsTab({
         <UserCard
           key={f.friendship_id}
           name={f.display_name}
+          username={f.username}
           email={f.email}
           tier={f.ranking_tier}
           wins={f.puzzles_won}
@@ -151,6 +166,7 @@ function RequestsTab({
         <UserCard
           key={r.friendship_id}
           name={r.display_name}
+          username={r.username}
           email={r.email}
           tier={r.ranking_tier}
           wins={r.puzzles_won}
@@ -219,6 +235,7 @@ function SearchTab({ userId, onSendRequest }: { userId: string; onSendRequest: (
             <UserCard
               key={p.id}
               name={p.display_name}
+              username={p.username}
               email={p.email}
               tier={p.ranking_tier}
               wins={p.puzzles_won}
