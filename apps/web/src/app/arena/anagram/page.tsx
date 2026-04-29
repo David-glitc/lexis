@@ -1,29 +1,77 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { AppShell } from "../../../components/layout/app-shell";
 import { Button } from "../../../components/ui/button";
 import { completeRound, createAnagramRound, getRoundSecondsRemaining, submitAnagramWord } from "../../../features/anagram/engine";
+import { useAuth } from "../../../providers/AuthProvider";
+import { createClient } from "../../../utils/supabase/client";
+import { ProfileService } from "../../../services/ProfileService";
+import { PointsService } from "../../../services/PointsService";
 import type { AnagramRoundState } from "../../../features/anagram/types";
 
 const RACKS = ["stream", "planet", "rescue", "stared", "friend", "bakers", "silent"];
+const VALID_DURATION_SECONDS = [30, 60, 120] as const;
+
+const supabase = createClient();
+const pointsService = new PointsService(supabase);
+const profileService = new ProfileService(supabase);
 
 function randomRack(): string {
   return RACKS[Math.floor(Math.random() * RACKS.length)];
 }
 
 export default function AnagramArenaPage() {
-  const [round, setRound] = useState<AnagramRoundState>(() => createAnagramRound(randomRack(), 60));
+  const searchParams = useSearchParams();
+  const { user } = useAuth();
+
+  const durationSeconds = useMemo(() => {
+    const raw = searchParams.get("duration");
+    const parsed = raw ? Number(raw) : 60;
+    if (VALID_DURATION_SECONDS.includes(parsed as (typeof VALID_DURATION_SECONDS)[number])) return parsed;
+    return 60;
+  }, [searchParams]);
+
+  const [round, setRound] = useState<AnagramRoundState>(() => createAnagramRound(randomRack(), durationSeconds));
   const [entry, setEntry] = useState("");
   const [message, setMessage] = useState("");
   const [secondsLeft, setSecondsLeft] = useState(() => getRoundSecondsRemaining(round));
 
   const roundRef = useRef(round);
   const lastLeftRef = useRef(secondsLeft);
+  const lastEnsuredProfileIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     roundRef.current = round;
   }, [round]);
+
+  // If the user changes timer (via query params), start a fresh round.
+  useEffect(() => {
+    const nextRound = createAnagramRound(randomRack(), durationSeconds);
+    setRound(nextRound);
+    setEntry("");
+    setMessage("");
+    setSecondsLeft(nextRound.durationSeconds);
+    lastLeftRef.current = nextRound.durationSeconds;
+  }, [durationSeconds]);
+
+  useEffect(() => {
+    if (!user) return;
+    if (lastEnsuredProfileIdRef.current === user.id) return;
+    lastEnsuredProfileIdRef.current = user.id;
+
+    // Ensure the profile row exists so points ledger updates can persist total_points.
+    profileService
+      .getProfile(user.id)
+      .then((existing) => {
+        if (existing) return;
+        const email = user.email ?? "";
+        const displayName = email ? email.split("@")[0] : "Player";
+        return profileService.createProfile(user.id, email, displayName);
+      })
+      .catch(() => {});
+  }, [user]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -55,6 +103,21 @@ export default function AnagramArenaPage() {
     setEntry("");
     if (result.accepted) {
       setMessage(`Accepted: ${result.normalizedWord.toUpperCase()} (+${result.pointsAwarded})`);
+
+      if (user) {
+        const idempotencyKey = `${user.id}:anagram:${round.startedAt}:${result.normalizedWord}`;
+        pointsService
+          .awardPoints(user.id, result.pointsAwarded, "anagram_word", {
+            mode: "anagram",
+            durationSeconds: round.durationSeconds,
+            rack: round.rack,
+            idempotency_key: idempotencyKey,
+          })
+          .catch(() => {});
+      } else {
+        setMessage(`Accepted: ${result.normalizedWord.toUpperCase()} (+${result.pointsAwarded}) (Sign in to earn points)`);
+      }
+
       return;
     }
     const reasonMap: Record<string, string> = {
@@ -68,7 +131,7 @@ export default function AnagramArenaPage() {
   };
 
   const reset = () => {
-    const nextRound = createAnagramRound(randomRack(), 60);
+    const nextRound = createAnagramRound(randomRack(), durationSeconds);
     setRound(nextRound);
     setEntry("");
     setMessage("");
@@ -77,7 +140,16 @@ export default function AnagramArenaPage() {
   };
 
   return (
-    <AppShell header={<h1 className="font-display text-lg font-bold text-white">Anagram Blitz</h1>}>
+    <AppShell
+      header={
+        <div className="flex items-baseline gap-3">
+          <h1 className="font-display text-lg font-bold text-white">Anagram Blitz</h1>
+          <span className="text-[10px] uppercase tracking-wider font-mono text-[#6abf5e] border border-[#6abf5e]/30 rounded-full px-2 py-1">
+            {durationSeconds}s Timer
+          </span>
+        </div>
+      }
+    >
       <div className="space-y-4 pt-2">
         <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4">
           <div className="text-xs text-zinc-500 mb-1 font-mono">Letter Rack</div>

@@ -215,6 +215,22 @@ export class PointsService {
     }
   }
 
+  async getAnagramPoints(userId: string): Promise<number> {
+    try {
+      const { data, error } = await this.client
+        .from("points_ledger")
+        .select("amount")
+        .eq("user_id", userId)
+        .eq("reason", "anagram_word");
+
+      if (error || !data) return 0;
+
+      return (data ?? []).reduce((sum, row) => sum + (Number((row as { amount: number }).amount) || 0), 0);
+    } catch {
+      return 0;
+    }
+  }
+
   async getPointsHistory(userId: string, limit = 50): Promise<PointsLedgerEntry[]> {
     try {
       const { data } = await this.client

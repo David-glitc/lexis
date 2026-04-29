@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Board } from "../../features/puzzle/board";
 import { Keyboard, type KeyboardState } from "../../features/puzzle/keyboard";
 import {
@@ -411,6 +411,41 @@ function SettingsModal({ onClose, hardMode, onToggleHardMode }: {
   );
 }
 
+function AnagramTimerModal({
+  onClose,
+  onPickDurationSeconds,
+}: {
+  onClose: () => void;
+  onPickDurationSeconds: (seconds: number) => void;
+}) {
+  return (
+    <ModalOverlay onClose={onClose}>
+      <h2 className="text-white text-center uppercase tracking-widest text-xs font-display font-bold mb-4">
+        Anagram Blitz Timer
+      </h2>
+
+      <p className="text-sm text-zinc-300 font-body mb-4">
+        Shorter time = higher points. Longer time = smaller points.
+      </p>
+
+      <div className="grid grid-cols-3 gap-2 mb-4">
+        {[30, 60, 120].map((seconds) => (
+          <Button key={seconds} size="sm" fullWidth onClick={() => onPickDurationSeconds(seconds)}>
+            {seconds}s
+          </Button>
+        ))}
+      </div>
+
+      <button
+        className="w-full py-2.5 rounded-full bg-[#3a3a3c] text-white text-sm font-bold uppercase tracking-wider hover:bg-[#4a4a4a] font-body"
+        onClick={onClose}
+      >
+        Cancel
+      </button>
+    </ModalOverlay>
+  );
+}
+
 function rebuildRows(guesses: string[], solution: string): MockPuzzle["rows"] {
   return guesses.map((guess, i) => ({
     id: `guess-${i + 1}`,
@@ -426,6 +461,7 @@ function rebuildRows(guesses: string[], solution: string): MockPuzzle["rows"] {
 
 export default function PlayPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const activeChallengeId = searchParams.get("challenge");
   const [mode, setMode] = useState<GameMode>("daily");
   const [puzzle, setPuzzle] = useState<MockPuzzle>(() => createDailyPuzzle());
@@ -434,6 +470,7 @@ export default function PlayPage() {
   const [showStats, setShowStats] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showAnagramTimer, setShowAnagramTimer] = useState(false);
   const [shakeRow, setShakeRow] = useState(false);
   const [revealingRow, setRevealingRow] = useState<number | undefined>();
   const [bounceRow, setBounceRow] = useState<number | undefined>();
@@ -991,6 +1028,12 @@ export default function PlayPage() {
           )}
           SPEED ⚡
         </button>
+        <button
+          className="text-xs px-3 sm:px-4 py-1.5 rounded-full bg-[#538d4e] text-white font-bold tracking-wider font-body hover:brightness-110 transition-colors"
+          onClick={() => setShowAnagramTimer(true)}
+        >
+          ANAGRAM BLITZ
+        </button>
       </div>
 
       {showCalendar && mode === "daily" && (
@@ -1133,6 +1176,15 @@ export default function PlayPage() {
           onClose={() => setShowSettings(false)}
           hardMode={hardMode}
           onToggleHardMode={() => setHardMode((v) => !v)}
+        />
+      )}
+      {showAnagramTimer && (
+        <AnagramTimerModal
+          onClose={() => setShowAnagramTimer(false)}
+          onPickDurationSeconds={(seconds) => {
+            setShowAnagramTimer(false);
+            router.push(`/arena/anagram?duration=${seconds}`);
+          }}
         />
       )}
     </div>

@@ -19,6 +19,14 @@ function scoreWord(word: string): number {
   return 10;
 }
 
+function durationMultiplier(durationSeconds: number): number {
+  // Shorter rounds should grant more points, longer rounds grant fewer.
+  // 30s -> 2x, 60s -> 1x, 120s -> 0.5x (clamped).
+  if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) return 1;
+  const raw = 60 / durationSeconds;
+  return Math.max(0.5, Math.min(3, raw));
+}
+
 export function createAnagramRound(rack: string, durationSeconds = 60): AnagramRoundState {
   return {
     rack: rack.toLowerCase(),
@@ -48,7 +56,9 @@ export function submitAnagramWord(state: AnagramRoundState, inputWord: string): 
     return { accepted: false, normalizedWord, reason: "not_in_dictionary", pointsAwarded: 0 };
   }
 
-  const pointsAwarded = scoreWord(normalizedWord);
+  const basePoints = scoreWord(normalizedWord);
+  const multiplier = durationMultiplier(state.durationSeconds);
+  const pointsAwarded = Math.max(1, Math.round(basePoints * multiplier));
   state.foundWords = [...state.foundWords, normalizedWord];
   state.score += pointsAwarded;
   return { accepted: true, normalizedWord, pointsAwarded };

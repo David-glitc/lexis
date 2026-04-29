@@ -118,6 +118,7 @@ export default function ProfilePage() {
   const [usernameError, setUsernameError] = useState("");
   const [loading, setLoading] = useState(true);
   const [lp, setLp] = useState(0);
+  const [anagramPoints, setAnagramPoints] = useState(0);
   const [localStats, setLocalStats] = useState({ played: 0, won: 0, winRate: 0, streak: 0, maxStreak: 0, averageAttempts: 0 });
   const [history, setHistory] = useState<PuzzleResult[]>([]);
   const lastLoadedUserIdRef = useRef<string | null>(null);
@@ -144,7 +145,8 @@ export default function ProfilePage() {
     ]);
 
     const points = await pointsService.getPoints(activeUserId);
-    return { profileResult, stats, historyResult, points };
+    const anagramOnlyPoints = await pointsService.getAnagramPoints(activeUserId);
+    return { profileResult, stats, historyResult, points, anagramOnlyPoints };
   }, []);
 
   useEffect(() => {
@@ -162,11 +164,12 @@ export default function ProfilePage() {
     lastLoadedUserIdRef.current = userId;
 
     loadProfileData(userId, userEmail)
-      .then(({ profileResult, stats, historyResult, points }) => {
+      .then(({ profileResult, stats, historyResult, points, anagramOnlyPoints }) => {
         if (!active) return;
         setLocalStats(stats);
         setHistory(historyResult);
         setLp(points);
+        setAnagramPoints(anagramOnlyPoints);
         if (profileResult) {
           setProfile(profileResult);
           setDisplayName(profileResult.display_name);
@@ -318,6 +321,7 @@ export default function ProfilePage() {
             { val: formatTime(stats.fastest_solve_ms), label: "Fastest" },
             { val: stats.total_points, label: "Total Points" },
             { val: lp, label: "LP" },
+            { val: anagramPoints, label: "Anagram Points" },
           ].map((s) => (
             <div key={s.label} className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-3 text-center">
               <div className="text-xl font-display font-bold text-white">{s.val}</div>
