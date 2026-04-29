@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Board } from "../../features/puzzle/board";
 import { Keyboard, type KeyboardState } from "../../features/puzzle/keyboard";
 import {
@@ -462,6 +462,7 @@ function rebuildRows(guesses: string[], solution: string): MockPuzzle["rows"] {
 export default function PlayPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const pathname = usePathname();
   const activeChallengeId = searchParams.get("challenge");
   const urlMode = useMemo((): GameMode => {
     if (activeChallengeId) return "challenge";
@@ -500,10 +501,32 @@ export default function PlayPage() {
   const playStartTimeRef = useRef<number>(Date.now());
   const [challengeLoading, setChallengeLoading] = useState(false);
   const [challengeNotFound, setChallengeNotFound] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
 
   useEffect(() => {
     setMode(urlMode);
   }, [urlMode]);
+
+  useEffect(() => {
+    setMoreOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setMoreOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  useEffect(() => {
+    if (!moreOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [moreOpen]);
 
   useEffect(() => {
     const challengeId = searchParams.get("challenge");
@@ -976,6 +999,8 @@ export default function PlayPage() {
   }
 
   const userInitial = user?.email?.[0]?.toUpperCase();
+  const active = (href: string) => pathname.startsWith(href);
+  const moreActive = ["/friends", "/settings", "/arena"].some((href) => active(href));
 
   return (
     <div className="h-[100dvh] flex flex-col bg-[#060606] relative noise">
@@ -1221,7 +1246,45 @@ export default function PlayPage() {
         <Keyboard state={keyboardState} onKey={handleKey} />
       </div>
 
-      {/* Global bottom navigation */}
+      <div
+        className={`fixed inset-0 z-[60] bg-black/60 transition-opacity duration-200 md:hidden ${
+          moreOpen ? "opacity-100" : "pointer-events-none opacity-0"
+        }`}
+        onClick={() => setMoreOpen(false)}
+      />
+
+      <div
+        className={`fixed bottom-0 left-0 right-0 z-[60] rounded-t-2xl border-t border-white/[0.06] bg-[#111] transition-transform duration-300 ease-out md:hidden ${
+          moreOpen ? "translate-y-0" : "translate-y-full"
+        }`}
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        <div className="flex justify-center pb-1 pt-3">
+          <div className="h-1 w-8 rounded-full bg-white/20" />
+        </div>
+        <nav className="flex flex-col gap-1 px-4 pb-4">
+          {[
+            { href: "/friends", label: "Friends", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg> },
+            { href: "/settings", label: "Settings", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.604.852.997 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg> },
+            { href: "/arena", label: "Puzzle Arena", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M7 12h10" /><path d="M12 7v10" /></svg> },
+          ].map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              onClick={() => setMoreOpen(false)}
+              className={`flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-colors ${
+                active(item.href)
+                  ? "bg-white/[0.06] text-white"
+                  : "text-zinc-400 hover:text-white"
+              }`}
+            >
+              {item.icon}
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+      </div>
+
       <nav className="fixed bottom-0 left-0 right-0 z-50 flex items-center border-t border-white/[0.06] bg-[#060606]/95 backdrop-blur-xl pb-[env(safe-area-inset-bottom)] md:hidden">
         {[
           { href: "/play", label: "Play", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polygon points="10 8 16 12 10 16 10 8" /></svg> },
@@ -1230,17 +1293,18 @@ export default function PlayPage() {
           { href: "/leaderboard", label: "Leaderboard", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" /><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" /><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" /><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" /></svg> },
           { href: "/profile", label: "Profile", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="5" /><path d="M20 21a8 8 0 0 0-16 0" /></svg> },
         ].map((item) => {
-          const isActive = item.href === "/play";
+          const isActive = active(item.href);
           const isProfile = item.href === "/profile";
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`relative flex flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2 text-[10px] transition-colors ${
+              aria-current={isActive ? "page" : undefined}
+              className={`relative flex min-h-14 flex-1 flex-col items-center justify-center gap-1 pb-1.5 pt-2 text-[11px] transition-colors ${
                 isActive ? "text-white" : "text-zinc-500"
               }`}
             >
-              {isActive && <span className="absolute top-0 h-1.5 w-1.5 rounded-full bg-[#538d4e]" />}
+              {isActive && <span className="absolute top-0 h-0.5 w-8 rounded-full bg-[#538d4e]" />}
               {isProfile && userInitial ? (
                 <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/10 text-[11px] font-semibold leading-none">
                   {userInitial}
@@ -1250,6 +1314,23 @@ export default function PlayPage() {
             </Link>
           );
         })}
+        <button
+          type="button"
+          onClick={() => setMoreOpen((v) => !v)}
+          aria-expanded={moreOpen}
+          aria-label="Open more navigation links"
+          className={`relative flex min-h-14 flex-1 flex-col items-center justify-center gap-1 pb-1.5 pt-2 text-[11px] transition-colors ${
+            moreActive ? "text-white" : "text-zinc-500"
+          }`}
+        >
+          {moreActive && <span className="absolute top-0 h-0.5 w-8 rounded-full bg-[#538d4e]" />}
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="5" r="1.5" />
+            <circle cx="12" cy="12" r="1.5" />
+            <circle cx="12" cy="19" r="1.5" />
+          </svg>
+          <span>More</span>
+        </button>
       </nav>
 
       {/* Modals */}
