@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fromUtcDateKey, toUtcDateKey } from "../utils/utc-date";
+import { ProfileService } from "./ProfileService";
 
 export interface PuzzleResult {
   puzzleId: string;
@@ -337,6 +338,7 @@ export class PuzzleService {
       .update({
         puzzles_played: played,
         puzzles_won: wonCount,
+        ranking_tier: ProfileService.computeTier(wonCount),
         win_rate: winRate,
         current_streak: dailyCurrentStreak,
         max_streak: Math.max(maxStreak, dailyCurrentStreak),

@@ -292,7 +292,9 @@ function CreateChallengeModal({
                     </div>
                     <div className="flex-1">
                       <div className="font-body text-sm font-medium text-white">{f.display_name}</div>
-                      <div className="font-mono text-[10px] uppercase tracking-wider text-zinc-500">{f.ranking_tier}</div>
+                      {f.ranking_tier !== "unranked" ? (
+                        <div className="font-mono text-[10px] uppercase tracking-wider text-zinc-500">{f.ranking_tier}</div>
+                      ) : null}
                     </div>
                     {selectedFriend === f.friend_id && (
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6abf5e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

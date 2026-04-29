@@ -328,7 +328,7 @@ export default function SettingsPage() {
                   )}
                 </div>
                 <span className="rounded-full bg-white/[0.06] border border-white/[0.08] px-2.5 py-1 text-[10px] font-mono text-zinc-400 uppercase">
-                  {profile.ranking_tier}
+                  {profile.ranking_tier === "unranked" ? "ROOKIE" : profile.ranking_tier}
                 </span>
               </div>
             )}

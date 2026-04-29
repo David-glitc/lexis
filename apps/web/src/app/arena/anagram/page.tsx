@@ -15,9 +15,9 @@ import { useAuth } from "../../../providers/AuthProvider";
 import { createClient } from "../../../utils/supabase/client";
 import { ProfileService } from "../../../services/ProfileService";
 import { PointsService } from "../../../services/PointsService";
+import { wordService } from "../../../services/WordService";
 import type { AnagramRoundState } from "../../../features/anagram/types";
 
-const RACKS = ["stream", "planet", "rescue", "stared", "friend", "bakers", "silent"];
 const VALID_DURATION_SECONDS = [30, 60, 120] as const;
 
 const supabase = createClient();
@@ -25,7 +25,7 @@ const pointsService = new PointsService(supabase);
 const profileService = new ProfileService(supabase);
 
 function randomRack(): string {
-  return RACKS[Math.floor(Math.random() * RACKS.length)];
+  return wordService.getRandomDictionaryWord(6, 8);
 }
 
 const WHEEL_SIZE_PX = 320;
@@ -72,6 +72,7 @@ function AnagramArenaClientPage() {
   const [displayWords, setDisplayWords] = useState<string[]>([]);
   const displayWordsRef = useRef<string[]>(displayWords);
   const [letterOrder, setLetterOrder] = useState<number[]>(() => createDefaultLetterOrder(round.rack));
+  const [showHistoryPanel, setShowHistoryPanel] = useState(false);
 
   const wheelRef = useRef<HTMLDivElement | null>(null);
 
@@ -206,7 +207,6 @@ function AnagramArenaClientPage() {
   }, []);
 
   const startNextRound = useCallback(() => {
-    if (!round.completed) return;
     setActivePath([]);
     setDisplayWords([]);
     const nextRound = createAnagramRound(randomRack(), durationSeconds);
@@ -215,7 +215,8 @@ function AnagramArenaClientPage() {
     setSecondsLeft(nextRound.durationSeconds);
     lastLeftRef.current = nextRound.durationSeconds;
     setLetterOrder(createDefaultLetterOrder(nextRound.rack));
-  }, [durationSeconds, round.completed]);
+    setShowHistoryPanel(false);
+  }, [durationSeconds]);
 
   const finalizeWord = useCallback(() => {
     if (!draggingRef.current) return;
@@ -308,13 +309,6 @@ function AnagramArenaClientPage() {
       return nearest;
     }
 
-    function isNearIndex(index: number, x: number, y: number): boolean {
-      const pos = getNodePosition(index, displayedRackLetters.length);
-      const dx = x - pos.x;
-      const dy = y - pos.y;
-      return dx * dx + dy * dy <= thresholdSq;
-    }
-
     function onPointerMove(e: PointerEvent) {
       if (!draggingRef.current) return;
       if (dragPointerIdRef.current !== e.pointerId) return;
@@ -329,18 +323,29 @@ function AnagramArenaClientPage() {
       if (roundRef.current.completed) return;
 
       const path = activePathRef.current;
-      if (path.length) {
-        const lastIndex = path[path.length - 1];
-        if (!isNearIndex(lastIndex, xLocal, yLocal)) {
-          setActivePath((prev) => prev.slice(0, -1));
-          return;
-        }
-      }
-
       const nearestIndex = findNearestIndex(xLocal, yLocal);
       if (nearestIndex === null) return;
 
       if (nearestIndex === lastNearestIndexRef.current) return;
+      if (!path.length) {
+        setActivePath([nearestIndex]);
+        lastNearestIndexRef.current = nearestIndex;
+        return;
+      }
+
+      const lastIndex = path[path.length - 1];
+      const previousIndex = path.length > 1 ? path[path.length - 2] : null;
+
+      if (nearestIndex === lastIndex) {
+        lastNearestIndexRef.current = nearestIndex;
+        return;
+      }
+
+      if (previousIndex !== null && nearestIndex === previousIndex) {
+        setActivePath((prev) => prev.slice(0, -1));
+        lastNearestIndexRef.current = nearestIndex;
+        return;
+      }
 
       if (path.includes(nearestIndex)) {
         lastNearestIndexRef.current = nearestIndex;
@@ -386,6 +391,18 @@ function AnagramArenaClientPage() {
     return lines;
   }, [activePath]);
 
+  const nodeMotion = useMemo(
+    () =>
+      displayedRackLetters.map((letter, index) => {
+        const driftX = ((letter.charCodeAt(0) + index * 13) % 9) - 4;
+        const driftY = ((letter.charCodeAt(0) + index * 7) % 9) - 4;
+        const duration = 2.6 + ((index % 5) * 0.3);
+        const delay = (index % 4) * 0.15;
+        return { driftX, driftY, duration, delay };
+      }),
+    [displayedRackLetters]
+  );
+
   return (
     <AppShell
       header={
@@ -421,7 +438,7 @@ function AnagramArenaClientPage() {
               <div
                 ref={wheelRef}
                 className="relative rounded-2xl border border-white/[0.06] bg-black/30"
-                style={{ width: WHEEL_SIZE_PX, height: WHEEL_SIZE_PX }}
+                style={{ width: WHEEL_SIZE_PX, height: WHEEL_SIZE_PX, touchAction: "none" }}
               >
                 <svg
                   className="absolute inset-0 pointer-events-none"
@@ -450,6 +467,7 @@ function AnagramArenaClientPage() {
                 {displayedRackLetters.map((letter, index) => {
                   const pos = getNodePosition(index, displayedRackLetters.length);
                   const active = activePath.includes(index);
+                  const motion = nodeMotion[index];
 
                   return (
                     <button
@@ -466,6 +484,12 @@ function AnagramArenaClientPage() {
                         transform: `translate(-50%, -50%) scale(${active ? 1.1 : 1})`,
                         border: active ? "1px solid #6abf5e" : "1px solid rgba(255,255,255,0.08)",
                         transition: "transform 120ms ease, background-color 120ms ease, border-color 120ms ease",
+                        touchAction: "none",
+                        animation: active
+                          ? "none"
+                          : `anagram-node-float ${motion.duration}s ease-in-out ${motion.delay}s infinite alternate`,
+                        ["--driftX" as any]: `${motion.driftX}px`,
+                        ["--driftY" as any]: `${motion.driftY}px`,
                       }}
                       onPointerDown={(e) => onPointerDownNode(index, e)}
                       disabled={round.completed}
@@ -495,15 +519,24 @@ function AnagramArenaClientPage() {
               <Button size="sm" onClick={shuffleLetterOrder} disabled={round.completed || displayedRackLetters.length < 2}>
                 Shuffle
               </Button>
+              <Button size="sm" variant="ghost" onClick={startNextRound}>
+                Restart
+              </Button>
+            </div>
+
+            <div className="mt-3 md:hidden flex items-center justify-center">
+              <Button size="sm" variant="secondary" onClick={() => setShowHistoryPanel(true)}>
+                History
+              </Button>
             </div>
 
             {message ? <div className="mt-3 text-xs text-zinc-400">{message}</div> : null}
           </div>
 
-          <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4">
+          <div className="hidden md:block rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4">
             <div className="flex items-center justify-between mb-2">
               <div className="text-sm text-zinc-300">Found Words ({displayWords.length})</div>
-              <Button size="sm" variant="ghost" onClick={startNextRound} disabled={!round.completed}>
+              <Button size="sm" variant="ghost" onClick={startNextRound}>
                 New Round
               </Button>
             </div>
@@ -528,7 +561,52 @@ function AnagramArenaClientPage() {
             )}
           </div>
         </div>
+
+        {showHistoryPanel && (
+          <div className="fixed inset-0 z-[70] md:hidden" onClick={() => setShowHistoryPanel(false)}>
+            <div className="absolute inset-0 bg-black/70" />
+            <div
+              className="absolute bottom-0 left-0 right-0 rounded-t-2xl border-t border-white/[0.08] bg-[#0a0a0a] p-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm text-zinc-300">Found Words ({displayWords.length})</div>
+                <Button size="sm" variant="ghost" onClick={() => setShowHistoryPanel(false)}>
+                  Close
+                </Button>
+              </div>
+              {displayWords.length === 0 ? (
+                <p className="text-xs text-zinc-500">No words found yet.</p>
+              ) : (
+                <div className="space-y-2 max-h-[50dvh] overflow-auto pr-1">
+                  {displayWords.map((word) => {
+                    const points = computeAnagramWordPoints(word, round.durationSeconds);
+                    return (
+                      <div
+                        key={`m-${word}`}
+                        className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3 py-2"
+                      >
+                        <span className="text-xs text-zinc-200 font-mono">{word.toUpperCase()}</span>
+                        <span className="text-xs text-[#6abf5e] font-mono">+{points}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
+      <style jsx>{`
+        @keyframes anagram-node-float {
+          from {
+            transform: translate(calc(-50% + 0px), calc(-50% + 0px)) scale(1);
+          }
+          to {
+            transform: translate(calc(-50% + var(--driftX)), calc(-50% + var(--driftY))) scale(1.02);
+          }
+        }
+      `}</style>
     </AppShell>
   );
 }

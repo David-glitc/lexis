@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { toUtcDateKey } from "../utils/utc-date";
+import { ProfileService } from "./ProfileService";
 
 export interface PointsLedgerEntry {
   id: string;
@@ -358,18 +359,18 @@ export class PointsService {
     try {
       const { data } = await this.client
         .from("profiles")
-        .select("id, username, display_name, total_points, ranking_tier, avatar_url")
+        .select("id, username, display_name, total_points, ranking_tier, avatar_url, puzzles_won")
         .order("total_points", { ascending: false })
         .range(offset, offset + limit - 1);
 
-      return (data ?? []) as Array<{
-        id: string;
-        username: string;
-        display_name: string;
-        total_points: number;
-        ranking_tier: string;
-        avatar_url: string | null;
-      }>;
+      return (data ?? []).map((row: any) => ({
+        id: row.id,
+        username: row.username,
+        display_name: row.display_name,
+        total_points: row.total_points,
+        ranking_tier: ProfileService.computeTier(Number(row.puzzles_won) || 0),
+        avatar_url: row.avatar_url,
+      }));
     } catch {
       return [];
     }
@@ -417,12 +418,19 @@ export class PointsService {
 
       const { data } = await this.client
         .from("profiles")
-        .select("id, username, display_name, total_points, ranking_tier, avatar_url")
+        .select("id, username, display_name, total_points, ranking_tier, avatar_url, puzzles_won")
         .in("id", Array.from(friendIds))
         .order("total_points", { ascending: false })
         .limit(limit);
 
-      return (data ?? []) as LeaderboardEntry[];
+      return (data ?? []).map((row: any) => ({
+        id: row.id,
+        username: row.username,
+        display_name: row.display_name,
+        total_points: row.total_points,
+        ranking_tier: ProfileService.computeTier(Number(row.puzzles_won) || 0),
+        avatar_url: row.avatar_url,
+      }));
     } catch {
       return [];
     }

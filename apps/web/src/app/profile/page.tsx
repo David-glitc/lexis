@@ -27,7 +27,7 @@ const TIER_COLORS: Record<RankingTier, string> = {
 };
 
 const TIER_LABELS: Record<RankingTier, string> = {
-  unranked: "Unranked",
+  unranked: "Rookie",
   bronze: "Bronze",
   silver: "Silver",
   gold: "Gold",
@@ -283,7 +283,7 @@ export default function ProfilePage() {
     );
   }
 
-  const tier: RankingTier = profile?.ranking_tier ?? ProfileService.computeTier(localStats.won);
+  const tier: RankingTier = ProfileService.computeTier(profile?.puzzles_won ?? localStats.won);
   const stats = profile ?? {
     puzzles_played: localStats.played,
     puzzles_won: localStats.won,

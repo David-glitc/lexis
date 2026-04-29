@@ -76,7 +76,9 @@ function UserCard({
             </div>
           </div>
         </div>
-        <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">{tier}</span>
+        {tier !== "unranked" ? (
+          <span className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">{tier}</span>
+        ) : null}
       </div>
       <div className="flex items-center justify-between text-xs text-zinc-500 mb-3 font-mono">
         <span>{wins} wins</span>

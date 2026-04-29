@@ -43,6 +43,7 @@ function formatPoints(n: number): string {
 }
 
 function TierBadge({ tier }: { tier: string }) {
+  if (!tier || tier === "unranked") return null;
   const colors = TIER_COLORS[tier] ?? TIER_COLORS.unranked;
   return (
     <span className={`inline-block text-[10px] px-2 py-0.5 rounded-full border uppercase tracking-wider font-mono ${colors}`}>

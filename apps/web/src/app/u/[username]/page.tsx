@@ -16,11 +16,16 @@ const profileService = new ProfileService(supabase);
 const friendsService = new FriendsService(supabase);
 
 export default function PublicProfilePage() {
+  const effectiveTier = useMemo(
+    () => (profile ? ProfileService.computeTier(profile.puzzles_won) : "unranked"),
+    [profile]
+  );
   const { username } = useParams<{ username: string }>();
   const { user } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [requestState, setRequestState] = useState<"idle" | "sent" | "error">("idle");
+  const [requestErrorMessage, setRequestErrorMessage] = useState("");
 
   useEffect(() => {
     if (!username) return;
@@ -39,6 +44,7 @@ export default function PublicProfilePage() {
   async function handleAddFriend() {
     if (!user || !profile) return;
     const { error } = await friendsService.sendFriendRequest(user.id, profile.id);
+    setRequestErrorMessage(error ?? "");
     setRequestState(error ? "error" : "sent");
   }
 
@@ -58,10 +64,16 @@ export default function PublicProfilePage() {
               <UserAvatar avatarId={profile.avatar_url} displayName={profile.display_name} size={56} />
               <div>
                 <h2 className="text-xl font-display font-bold text-white">{profile.display_name}</h2>
-                <Link href={`/u/${profile.username}`} className="text-xs text-zinc-500 hover:text-[#6abf5e] transition-colors">
-                  @{profile.username}
-                </Link>
-                <p className="text-xs text-zinc-500">{profile.ranking_tier.toUpperCase()}</p>
+                {profile.username ? (
+                  <Link href={`/u/${profile.username}`} className="text-xs text-zinc-500 hover:text-[#6abf5e] transition-colors">
+                    @{profile.username}
+                  </Link>
+                ) : (
+                  <p className="text-xs text-zinc-500">{profile.email}</p>
+                )}
+                {effectiveTier !== "unranked" ? (
+                  <p className="text-xs text-zinc-500">{effectiveTier.toUpperCase()}</p>
+                ) : null}
               </div>
             </div>
             {profile.bio && <p className="mt-3 text-sm text-zinc-400">{profile.bio}</p>}
@@ -71,7 +83,7 @@ export default function PublicProfilePage() {
                   {requestState === "sent" ? "Request Sent" : "Add Friend"}
                 </Button>
                 {requestState === "error" && (
-                  <p className="text-xs text-red-400 mt-2">Could not send friend request.</p>
+                  <p className="text-xs text-red-400 mt-2">{requestErrorMessage || "Could not send friend request."}</p>
                 )}
               </div>
             )}
