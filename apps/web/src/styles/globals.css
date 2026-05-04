@@ -205,3 +205,78 @@ body {
 .hero-spotlight {
   background: radial-gradient(ellipse 70% 50% at 50% 45%, rgba(83, 141, 78, 0.18) 0%, transparent 70%);
 }
+
+/* ─── Confetti animation ─── */
+@keyframes confetti-fall {
+  0% {
+    opacity: 1;
+    transform: translateY(-100vh) rotateZ(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(100vh) rotateZ(720deg);
+  }
+}
+
+.confetti {
+  position: fixed;
+  pointer-events: none;
+  animation: confetti-fall 3s ease-in forwards;
+}
+
+/* ─── Victory celebrate bounce ─── */
+@keyframes celebrate-bounce {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  25% { transform: scale(1.1) rotate(5deg); }
+  50% { transform: scale(1.15) rotate(-5deg); }
+  75% { transform: scale(1.1) rotate(5deg); }
+}
+.animate-celebrate { animation: celebrate-bounce 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55); }
+
+/* ─── Slide in from bottom ─── */
+@keyframes slide-up {
+  0% { opacity: 0; transform: translateY(30px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.animate-slide-up { animation: slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+
+/* ─── Fade in ─── */
+@keyframes fade-in {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+.animate-fade-in { animation: fade-in 0.3s ease-out; }
+
+/* ─── Pulse grow ─── */
+@keyframes pulse-grow {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.05); opacity: 0.8; }
+}
+.animate-pulse-grow { animation: pulse-grow 2s ease-in-out infinite; }
+
+/* ─── Scale down on load ─── */
+@keyframes scale-in {
+  0% { transform: scale(0.95); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.animate-scale-in { animation: scale-in 0.3s ease-out; }
+
+/* ─── Status light pulse ─── */
+@keyframes status-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(83, 141, 78, 0.7); }
+  50% { box-shadow: 0 0 0 8px rgba(83, 141, 78, 0); }
+}
+.animate-status-pulse { animation: status-pulse 2s infinite; }
+
+/* ─── Spin loader ─── */
+@keyframes spin-smooth {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+.animate-spin-smooth { animation: spin-smooth 1s linear infinite; }
+
+/* ─── Neon glow effect ─── */
+.neon-glow {
+  text-shadow: 0 0 8px rgba(83, 141, 78, 0.8), 0 0 16px rgba(83, 141, 78, 0.4);
+  box-shadow: 0 0 12px rgba(83, 141, 78, 0.3);
+}
